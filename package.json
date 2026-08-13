@@ -1,0 +1,192 @@
+{
+  "name": "deepseek-harness-vscode",
+  "displayName": "DeepSeek Harness",
+  "description": "原生 DeepSeek Harness VS Code Agent，无 WebUI 嵌套且无需本地部署",
+  "version": "0.3.0",
+  "type": "module",
+  "publisher": "deepseek-harness-community",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "deepseek",
+    "agent",
+    "coding assistant",
+    "deepseek harness"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.cjs",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "compile": "npm run check-types && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run check-types && npm run test && node esbuild.mjs --production && node scripts/package-vsix.mjs",
+    "vscode:prepublish": "npm run check-types && node esbuild.mjs --production"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "deepseekHarness.openChat",
+        "title": "DeepSeek Harness: 打开工作台",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "deepseekHarness.reloadRuntime",
+        "title": "DeepSeek Harness: 重新加载工作台",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "deepseekHarness.setApiKey",
+        "title": "DeepSeek Harness: 设置 API Key"
+      },
+      {
+        "command": "deepseekHarness.clearApiKey",
+        "title": "DeepSeek Harness: 清除 API Key"
+      },
+      {
+        "command": "deepseekHarness.showLogs",
+        "title": "DeepSeek Harness: 显示日志"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deepseekHarness",
+          "title": "DeepSeek Harness",
+          "icon": "media/deepseek-harness.svg"
+        }
+      ]
+    },
+    "views": {
+      "deepseekHarness": [
+        {
+          "id": "deepseekHarness.chatView",
+          "name": "对话",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "deepseekHarness.reloadRuntime",
+          "when": "view == deepseekHarness.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deepseekHarness.showLogs",
+          "when": "view == deepseekHarness.chatView",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DeepSeek Harness",
+      "properties": {
+        "deepseekHarness.apiKey": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "DeepSeek API Key。按需求保存在本机 VS Code 用户 `settings.json` 中，不写入工作区配置；该字段是明文，请勿提交或分享 settings 文件。"
+        },
+        "deepseekHarness.model": {
+          "type": "string",
+          "enum": [
+            "deepseek-v4-flash",
+            "deepseek-v4-pro"
+          ],
+          "enumDescriptions": [
+            "DeepSeek V4 Flash，响应更快。",
+            "DeepSeek V4 Pro，适合复杂编码与长链路推理。"
+          ],
+          "default": "deepseek-v4-flash",
+          "description": "Harness 新会话默认使用的模型。"
+        },
+        "deepseekHarness.reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "off",
+            "high",
+            "max"
+          ],
+          "enumDescriptions": [
+            "关闭显式推理。",
+            "高推理强度（Harness 默认值）。",
+            "最高推理强度。"
+          ],
+          "default": "high",
+          "description": "DeepSeek Harness 推理等级。"
+        },
+        "deepseekHarness.agentPreset": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "code",
+            "minimal",
+            "cordis"
+          ],
+          "enumDescriptions": [
+            "标准模式：完整编码 Agent。",
+            "PTC 模式：通过 Code Mode SDK 组合多步工具操作。",
+            "极简模式：精简的编码工具集。",
+            "创造模式：检查运行时并创作自定义 Agent Preset。"
+          ],
+          "default": "standard",
+          "description": "Harness 新会话默认使用的官方 Agent Preset。"
+        },
+        "deepseekHarness.provider": {
+          "type": "string",
+          "default": "deepseek-official",
+          "description": "Harness 运行时中注册的提供方路由。"
+        },
+        "deepseekHarness.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "可选的 DeepSeek API Base URL；留空时由 Harness 使用默认地址。"
+        },
+        "deepseekHarness.permissionMode": {
+          "type": "string",
+          "enum": [
+            "read-only",
+            "workspace-write",
+            "danger-full-access"
+          ],
+          "enumDescriptions": [
+            "禁止 Harness 工具写入文件。",
+            "仅允许写入当前工作区及运行时临时目录。",
+            "不施加 Harness 文件沙箱限制。"
+          ],
+          "default": "workspace-write",
+          "description": "Harness 工具的文件访问与审批默认策略。"
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/node": "^24.0.0",
+    "@types/vscode": "1.101.0",
+    "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.9",
+    "eslint": "^9.33.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.1",
+    "vitest": "^4.0.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
+    "node": "22.22.3",
+    "ws": "^8.21.3"
+  }
+}

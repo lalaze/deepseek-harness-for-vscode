@@ -1,0 +1,192 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import * as path from 'node:path'
+import * as vscode from 'vscode'
+import type { ConfigurationService, HarnessConfiguration } from '../config/configuration.js'
+import type { CredentialStore } from '../security/credential-store.js'
+import type { BundledRuntimeResolver } from './bundled-runtime.js'
+import { renderOverlay } from './runtime-overlay.js'
+
+const START_TIMEOUT_MS = 90_000
+const STOP_TIMEOUT_MS = 5_000
+
+export type HostRuntimePhase = 'idle' | 'starting' | 'ready' | 'stopping' | 'error'
+
+export interface HostRuntimeState {
+  readonly phase: HostRuntimePhase
+  readonly url?: string
+  readonly error?: string
+}
+
+/** Owns the headless local Gateway process; its official Web frontend is never loaded. */
+export class HarnessHostRuntime implements vscode.Disposable {
+  private readonly stateEmitter = new vscode.EventEmitter<HostRuntimeState>()
+  private child: ChildProcessWithoutNullStreams | undefined
+  private startTask: Promise<string> | undefined
+  private stopTask: Promise<void> | undefined
+  private identity: string | undefined
+  private stateValue: HostRuntimeState = { phase: 'idle' }
+
+  readonly onDidChangeState = this.stateEmitter.event
+
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly configuration: ConfigurationService,
+    private readonly credentials: CredentialStore,
+    private readonly resolver: BundledRuntimeResolver,
+    private readonly output: vscode.OutputChannel,
+  ) {}
+
+  get state(): HostRuntimeState {
+    return this.stateValue
+  }
+
+  async start(): Promise<string> {
+    if (this.stopTask !== undefined) await this.stopTask
+    const configuration = this.configuration.get()
+    const apiKey = await this.credentials.getApiKey()
+    const workspace = workspaceDirectory()
+    const identity = runtimeIdentity(workspace, configuration, apiKey)
+    if (this.stateValue.phase === 'ready' && this.identity === identity && this.stateValue.url !== undefined) {
+      return this.stateValue.url
+    }
+    if (this.startTask !== undefined && this.identity === identity) return this.startTask
+    if (this.child !== undefined) await this.stop()
+
+    this.identity = identity
+    this.setState({ phase: 'starting' })
+    const task = this.spawnRuntime(workspace, configuration, apiKey)
+    this.startTask = task
+    try {
+      return await task
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.setState({ phase: 'error', error: message })
+      throw error
+    } finally {
+      if (this.startTask === task) this.startTask = undefined
+    }
+  }
+
+  async restart(): Promise<string> {
+    await this.stop()
+    return await this.start()
+  }
+
+  stop(): Promise<void> {
+    this.stopTask ??= this.performStop().finally(() => { this.stopTask = undefined })
+    return this.stopTask
+  }
+
+  dispose(): void {
+    void this.stop()
+    this.stateEmitter.dispose()
+  }
+
+  private async spawnRuntime(
+    workspace: string,
+    configuration: HarnessConfiguration,
+    apiKey: string | undefined,
+  ): Promise<string> {
+    const launch = await this.resolver.resolve()
+    const home = path.join(this.context.globalStorageUri.fsPath, 'harness-home')
+    const overlay = path.join(home, 'vscode.patch.yml')
+    await mkdir(home, { recursive: true })
+    await writeFile(overlay, renderOverlay(configuration), 'utf8')
+
+    const args = [...launch.args, 'web', '--patch', overlay, '--host', '127.0.0.1', '--port', '0']
+    const env: NodeJS.ProcessEnv = {
+      ...launch.environment,
+      DSH_HOME: home,
+      DSH_CWD: workspace,
+      DSH_PERMISSION_MODE: configuration.permissionMode,
+      DSH_TELEMETRY_DISABLED: '1',
+      ...(apiKey === undefined || apiKey === '' ? {} : { DEEPSEEK_API_KEY: apiKey }),
+      ...(configuration.baseUrl === undefined ? {} : { DEEPSEEK_BASE_URL: configuration.baseUrl }),
+    }
+    this.output.appendLine(
+      `[host] 启动内置 Harness Gateway（cwd=${workspace}, model=${configuration.model}, reasoning=${configuration.reasoningEffort}, preset=${configuration.agentPreset}）`,
+    )
+
+    const child = spawn(launch.command, args, { cwd: workspace, env, windowsHide: true })
+    this.child = child
+    child.stderr.on('data', (chunk: Buffer | string) => this.output.append(String(chunk)))
+
+    return await new Promise<string>((resolve, reject) => {
+      let settled = false
+      let buffer = ''
+      const timeout = setTimeout(() => finish(new Error('内置 Harness Web 运行时启动超时，请查看输出日志。')), START_TIMEOUT_MS)
+
+      const finish = (result: string | Error): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        if (typeof result === 'string') {
+          this.setState({ phase: 'ready', url: result })
+          resolve(result)
+        } else {
+          reject(result)
+        }
+      }
+
+      child.stdout.on('data', (chunk: Buffer | string) => {
+        const text = String(chunk)
+        this.output.append(text)
+        buffer += text
+        const lines = buffer.split(/\r?\n/u)
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          const match = /dsh web:\s+(http:\/\/127\.0\.0\.1:\d+)/u.exec(line)
+          if (match?.[1] !== undefined) finish(match[1])
+        }
+      })
+      child.once('error', (error) => finish(error))
+      child.once('exit', (code, signal) => {
+        if (this.child === child) this.child = undefined
+        const message = `内置 Harness Web 运行时已退出（code=${String(code)}, signal=${String(signal)}）。`
+        if (!settled) finish(new Error(message))
+        else if (this.stateValue.phase !== 'stopping' && this.stateValue.phase !== 'idle') {
+          this.setState({ phase: 'error', error: message })
+        }
+      })
+    })
+  }
+
+  private async performStop(): Promise<void> {
+    const child = this.child
+    this.child = undefined
+    this.identity = undefined
+    if (child === undefined) {
+      this.setState({ phase: 'idle' })
+      return
+    }
+    this.setState({ phase: 'stopping' })
+    child.kill('SIGTERM')
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        child.kill('SIGKILL')
+        resolve()
+      }, STOP_TIMEOUT_MS)
+      child.once('exit', () => {
+        clearTimeout(timeout)
+        resolve()
+      })
+    })
+    this.setState({ phase: 'idle' })
+  }
+
+  private setState(state: HostRuntimeState): void {
+    this.stateValue = state
+    this.stateEmitter.fire(state)
+  }
+}
+
+function workspaceDirectory(): string {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
+}
+
+function runtimeIdentity(workspace: string, configuration: HarnessConfiguration, apiKey: string | undefined): string {
+  const keyFingerprint = createHash('sha256').update(apiKey ?? '').digest('hex')
+  return JSON.stringify({ workspace, configuration, keyFingerprint })
+}
