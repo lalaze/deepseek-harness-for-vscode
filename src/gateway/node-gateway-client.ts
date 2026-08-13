@@ -8,11 +8,18 @@ import type {
   ServerRequest,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { hostFrameSchema, muxFrameSchema } from '@deepseek-ai/dsh-host-apiproxy/api/events.schema'
-import { serverRequestSchema } from '@deepseek-ai/dsh-host-apiproxy/api/rpc.schema'
+import { serverRequestSchema, serverResponseSchema } from '@deepseek-ai/dsh-host-apiproxy/api/rpc.schema'
 import { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
 
 type FrameParser<F> = { parse(value: unknown): F }
 type SocketItem<F> = { readonly kind: 'frame'; readonly envelope: RpcRequest<F> } | { readonly kind: 'end' }
+
+/** A host-registered slash command descriptor, as served by `commands/list`. */
+export interface HostCommandDescriptor {
+  readonly name: string
+  readonly description: string
+  readonly input?: { readonly hint: string }
+}
 
 /**
  * Node transport for the Harness Gateway. Unary calls use the official typed
@@ -22,6 +29,38 @@ type SocketItem<F> = { readonly kind: 'frame'; readonly envelope: RpcRequest<F> 
 export class NodeGatewayClient extends AbstractApiClient {
   constructor(private readonly baseUrl: string) {
     super(30_000)
+  }
+
+  /** Lists the slash commands the active Harness deployment registers for one session. */
+  async listCommands(sessionId: string): Promise<readonly HostCommandDescriptor[]> {
+    return this.callUnaryRaw<readonly HostCommandDescriptor[]>('commands/list', { agentId: sessionId })
+  }
+
+  /**
+   * Generic unary call for endpoints outside the typed RpcMethodMap (the host
+   * commands service is a typert remote, not part of the api-proxy contract).
+   * Mirrors `callUnary`'s envelope lifecycle without the per-method value
+   * schema table; the caller narrows the raw value.
+   */
+  private async callUnaryRaw<T>(method: string, payload: Record<string, unknown>): Promise<T> {
+    const message = {
+      type: 'client-request' as const,
+      rpcId: this.mintRpcId(),
+      method,
+      payload,
+    }
+    this.onEnvelope(message)
+    const response = await this.doFetch(new URL(`/api/${method}`, this.resolveBase()), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(message),
+    })
+    if (!response.ok) throw new Error(`transport failure for ${method}: HTTP ${response.status}`)
+    const full = serverResponseSchema.parse(await response.json())
+    this.onEnvelope(full)
+    if (full.rpcId !== message.rpcId) throw new Error(`rpcId mismatch for ${method}: sent ${message.rpcId}, got ${full.rpcId}`)
+    if (!full.result.ok) throw new Error(`RPC ${method} failed: ${full.result.error.code}: ${full.result.error.message}`)
+    return full.result.value as T
   }
 
   protected override resolveBase(): string {

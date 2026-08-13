@@ -87,6 +87,7 @@ export interface ActiveSessionView {
   readonly parentSessionId?: string
   readonly subagentMode?: 'one-shot' | 'continuable'
   readonly permissions?: PermissionView
+  readonly commands?: readonly CommandEntry[]
   readonly plan?: { readonly active: boolean; readonly pending: boolean }
   readonly goal?: GoalView
 }
@@ -107,6 +108,43 @@ export type SubagentView = {
 export interface PermissionView {
   readonly currentValue: string
   readonly options: readonly { readonly value: string; readonly name: string; readonly description?: string }[]
+}
+
+/**
+ * A slash-command entry shown in the composer menu. `host` commands are
+ * registered by the Harness runtime (`/compact`, `/plan`, …) and execute when
+ * the composed line is sent; `extension` commands are handled locally by this
+ * extension (model / reasoning / preset pickers).
+ */
+export interface CommandEntry {
+  readonly name: string
+  readonly description: string
+  readonly input?: { readonly hint: string }
+  readonly kind: 'host' | 'extension'
+}
+
+/** Extension-owned slash commands, appended after the runtime's host list. */
+export const EXTENSION_COMMANDS: readonly CommandEntry[] = [
+  { name: 'model', description: '切换当前会话模型（Flash / Pro）', kind: 'extension' },
+  { name: 'reasoning', description: '切换推理等级（off / high / max）', kind: 'extension' },
+  { name: 'preset', description: '切换 Agent Preset（standard / code / minimal / cordis）', kind: 'extension' },
+]
+
+/** Projects the runtime `commands/list` payload into menu entries plus the local extensions. */
+export function projectionCommands(value: unknown): readonly CommandEntry[] {
+  const hosts: CommandEntry[] = []
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (!isRecord(item) || typeof item.name !== 'string' || typeof item.description !== 'string'
+        || item.description.trim() === '') continue
+      const input = isRecord(item.input) && typeof item.input.hint === 'string' && item.input.hint.trim() !== ''
+        ? { hint: item.input.hint }
+        : undefined
+      hosts.push({ name: item.name, description: item.description, ...(input === undefined ? {} : { input }), kind: 'host' })
+    }
+  }
+  hosts.sort((left, right) => left.name < right.name ? -1 : 1)
+  return [...hosts, ...EXTENSION_COMMANDS]
 }
 
 export interface GoalView {

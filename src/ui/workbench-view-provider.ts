@@ -131,6 +131,12 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'setPermission':
         await this.gateway.selectPermission(requiredString(value, 'value'))
         break
+      case 'loadCommands':
+        await this.gateway.refreshCommands()
+        break
+      case 'runCommand':
+        await this.runCommand(requiredString(value, 'name'))
+        break
       case 'setPlan':
         await this.gateway.setPlanMode(value.active === true)
         break
@@ -170,6 +176,59 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         await this.gateway.answerQuestions(requiredString(value, 'key'), questionAnswers(value.answers))
         break
     }
+  }
+
+  private async runCommand(name: string): Promise<void> {
+    if (name === 'model') await this.pickModel()
+    else if (name === 'reasoning') await this.pickReasoning()
+    else if (name === 'preset') await this.pickPreset()
+  }
+
+  private async pickModel(): Promise<void> {
+    const current = await this.gateway.snapshot()
+    const models = current.active?.models ?? []
+    const items: ModelPickItem[] = models.map((model) => ({
+      label: model.name,
+      description: model.provider,
+      ...(model.description === undefined ? {} : { detail: model.description }),
+      picked: model.id === current.active?.model?.model && model.provider === current.active?.model?.provider,
+      provider: model.provider,
+      id: model.id,
+    }))
+    const selected = await vscode.window.showQuickPick(items, {
+      title: '切换模型',
+      placeHolder: '选择当前会话使用的模型',
+    })
+    if (selected !== undefined) {
+      const reasoning = current.active?.model?.reasoningEffort
+      await this.gateway.selectModel(selected.provider, selected.id, reasoning)
+    }
+  }
+
+  private async pickReasoning(): Promise<void> {
+    const items: ValuePickItem[] = REASONING_OPTIONS.map((item) => ({
+      label: item.label,
+      ...(item.description === undefined ? {} : { detail: item.description }),
+      value: item.id,
+    }))
+    const selected = await vscode.window.showQuickPick(items, {
+      title: '切换推理等级',
+      placeHolder: '选择当前会话的推理强度',
+    })
+    if (selected !== undefined) await this.gateway.selectReasoning(selected.value)
+  }
+
+  private async pickPreset(): Promise<void> {
+    const current = await this.gateway.snapshot()
+    const items: ValuePickItem[] = current.presets.length > 0
+      ? current.presets.filter((item) => !item.broken).map((item) => ({
+        label: item.name || item.id,
+        ...(item.description === undefined ? {} : { detail: item.description }),
+        value: item.id,
+      }))
+      : AGENT_PRESET_OPTIONS.map((item) => ({ label: item.label, ...(item.description === undefined ? {} : { detail: item.description }), value: item.id }))
+    const selected = await vscode.window.showQuickPick(items, { title: '切换 Agent Preset', placeHolder: '选择当前会话的 Agent 预设' })
+    if (selected !== undefined) await this.gateway.selectPreset(selected.value)
   }
 
   private html(webview: vscode.Webview): string {
@@ -248,8 +307,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
       <div id="interactions" class="interactions"></div>
       <section class="composer-shell">
+        <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="斜杠命令"></div>
         <div id="attachment-rail" class="attachment-rail hidden"></div>
-        <textarea id="prompt" rows="1" placeholder="向 DeepSeek Harness 提问…" aria-label="消息"></textarea>
+        <textarea id="prompt" rows="1" placeholder="向 DeepSeek Harness 提问… 输入 / 查看命令" aria-label="消息"></textarea>
         <div class="composer-bar">
           <button id="attach" class="text-button" title="添加图片">＋ 图片</button>
           <input id="image-input" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
@@ -272,6 +332,15 @@ function requiredString(value: Record<string, unknown>, key: string): string {
   const item = value[key]
   if (typeof item !== 'string' || item.trim() === '') throw new Error(`无效的 ${key}。`)
   return item
+}
+
+interface ModelPickItem extends vscode.QuickPickItem {
+  readonly provider: string
+  readonly id: string
+}
+
+interface ValuePickItem extends vscode.QuickPickItem {
+  readonly value: string
 }
 
 function optionalString(value: unknown): string | undefined {

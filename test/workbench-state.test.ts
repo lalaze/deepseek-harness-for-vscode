@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
-import { projectConversation } from '../src/domain/workbench-state.js'
+import { EXTENSION_COMMANDS, projectConversation, projectionCommands } from '../src/domain/workbench-state.js'
 
 describe('projectConversation', () => {
   it('projects durable messages, reasoning, tools and the latest todo snapshot', () => {
@@ -44,6 +44,38 @@ describe('projectConversation', () => {
     }, 'append')] as HistoryEntry[]
     expect(projectConversation(finalized).messages).toHaveLength(1)
     expect(projectConversation(finalized).messages[0]?.blocks).toEqual([{ kind: 'text', text: '最终' }])
+  })
+})
+
+describe('projectionCommands', () => {
+  it('merges host command descriptors with the extension commands, sorted by name', () => {
+    const commands = projectionCommands([
+      { name: 'plan', description: 'Enter or leave plan mode', input: { hint: '[off|message]' } },
+      { name: 'compact', description: '压缩当前会话上下文' },
+      { name: 'permission', description: '切换权限预设', input: { hint: '<preset>' } },
+    ])
+    expect(commands.map((command) => command.name)).toEqual([
+      'compact', 'permission', 'plan',
+      ...EXTENSION_COMMANDS.map((command) => command.name),
+    ])
+    expect(commands[2]).toMatchObject({ name: 'plan', kind: 'host', input: { hint: '[off|message]' } })
+    expect(commands[0]?.input).toBeUndefined()
+    expect(commands.filter((command) => command.kind === 'extension')).toHaveLength(EXTENSION_COMMANDS.length)
+  })
+
+  it('skips malformed entries and still exposes the extension commands', () => {
+    const commands = projectionCommands([
+      { name: 42, description: 'broken' },
+      { name: 'goal', description: '' },
+      { name: 'ok', description: '有效命令', input: { hint: '' } },
+    ])
+    expect(commands.filter((command) => command.kind === 'host').map((command) => command.name)).toEqual(['ok'])
+    expect(commands.at(-1)?.kind).toBe('extension')
+  })
+
+  it('returns the extension commands only when the host list is empty or absent', () => {
+    expect(projectionCommands([])).toEqual(EXTENSION_COMMANDS)
+    expect(projectionCommands(undefined)).toEqual(EXTENSION_COMMANDS)
   })
 })
 

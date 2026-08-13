@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- 输入框支持 `/` 斜杠命令菜单：输入 `/` 弹出官方命令列表（`/compact`、`/feedback`、`/goal`、`/permission`、`/plan`），支持过滤、键盘导航与一键插入。
+- 新增扩展级斜杠命令 `/model`、`/reasoning`、`/preset`，通过原生快速选择器切换会话模型、推理等级与 Agent Preset。
+- 命令列表从运行时 `commands/list` 动态获取，随会话切换刷新。
+
 ## 0.3.0
 
 - 移除官方 WebUI iframe，改为原生 VS Code 对话工作台。

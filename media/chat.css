@@ -249,7 +249,17 @@ button:disabled { cursor: default; opacity: .45; }
 .question-option small { grid-column: 2; color: var(--vscode-descriptionForeground); }
 .custom-answer { width: 100%; padding: 5px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); }
 
-.composer-shell { margin: 5px 8px 0; overflow: hidden; background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-widget-border)); border-radius: 10px; box-shadow: 0 4px 16px color-mix(in srgb, #000 14%, transparent); }
+.composer-shell { margin: 5px 8px 0; overflow: visible; background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-widget-border)); border-radius: 10px; box-shadow: 0 4px 16px color-mix(in srgb, #000 14%, transparent); position: relative; }
+.composer-shell:focus-within { border-color: var(--vscode-focusBorder); }
+.command-menu { position: absolute; left: 6px; right: 6px; bottom: calc(100% + 6px); z-index: 20; max-height: 46vh; padding: 4px; display: grid; gap: 1px; overflow-y: auto; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border); border-radius: 8px; box-shadow: 0 6px 18px color-mix(in srgb, #000 22%, transparent); }
+.command-menu-item { padding: 6px 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: baseline; text-align: left; color: var(--vscode-foreground); background: transparent; border: 0; border-radius: 5px; font-size: 10px; }
+.command-menu-item:hover { background: var(--vscode-list-hoverBackground); }
+.command-menu-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.command-name { font-weight: 600; }
+.command-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vscode-descriptionForeground); }
+.command-menu-item.active .command-desc { color: var(--vscode-list-activeSelectionForeground); }
+.command-hint { color: var(--vscode-descriptionForeground); font-family: var(--vscode-editor-font-family, monospace); font-size: 9px; }
+.command-menu-item.active .command-hint { color: var(--vscode-list-activeSelectionForeground); }
 .composer-shell:focus-within { border-color: var(--vscode-focusBorder); }
 .attachment-rail { padding: 7px 8px 0; display: flex; gap: 6px; overflow-x: auto; }
 .attachment-item { width: 48px; height: 48px; flex: none; position: relative; border: 1px solid var(--vscode-widget-border); border-radius: 6px; }

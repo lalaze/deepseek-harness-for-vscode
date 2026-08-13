@@ -38,6 +38,7 @@ const elements = {
   agentCount: byId('agent-count'),
   interactions: byId('interactions'),
   prompt: byId('prompt'),
+  commandMenu: byId('command-menu'),
   attach: byId('attach'),
   imageInput: byId('image-input'),
   attachmentRail: byId('attachment-rail'),
@@ -51,6 +52,8 @@ let previousTail = ''
 let attachments = []
 let searchResults = []
 let searchTimer
+let menuState = null
+let menuLoadedSession = null
 
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'searchResults') {
@@ -93,12 +96,51 @@ elements.send.addEventListener('click', () => {
   if (payload?.state.active?.running) post('cancel')
   else sendPrompt()
 })
-elements.prompt.addEventListener('input', resizePrompt)
+elements.prompt.addEventListener('input', () => {
+  resizePrompt()
+  updateCommandMenu()
+})
 elements.prompt.addEventListener('keydown', (event) => {
+  if (menuState && menuState.items.length > 0) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      menuState.index = (menuState.index + 1) % menuState.items.length
+      renderCommandMenu()
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      menuState.index = (menuState.index - 1 + menuState.items.length) % menuState.items.length
+      renderCommandMenu()
+      return
+    }
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault()
+      chooseCommand(menuState.items[menuState.index])
+      return
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      if (menuState.items[menuState.index]) {
+        const name = menuState.items[menuState.index].name
+        closeCommandMenu()
+        insertCommand(name)
+      }
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeCommandMenu()
+      return
+    }
+  }
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     sendPrompt()
   }
+})
+elements.prompt.addEventListener('blur', () => {
+  setTimeout(() => { if (!elements.commandMenu.matches(':hover')) closeCommandMenu() }, 120)
 })
 elements.attach.addEventListener('click', () => elements.imageInput.click())
 elements.imageInput.addEventListener('change', async () => {
@@ -148,6 +190,7 @@ function render() {
   renderAttachmentRail()
   renderDetails()
   renderComposer(active)
+  updateCommandMenu()
 }
 
 function renderPhase(state) {
@@ -462,7 +505,90 @@ function renderComposer(active) {
     : active?.running ? '运行中 · Enter 加入队列' : active?.model?.model || (active?.subagentMode === 'continuable' ? '可继续子 Agent' : '')
 }
 
+function updateCommandMenu() {
+  const active = payload?.state?.active
+  const token = currentCommandToken(elements.prompt)
+  if (token === undefined || !active) {
+    closeCommandMenu()
+    return
+  }
+  if (!menuState || menuState.query !== token) menuState = { query: token, index: 0, items: [] }
+  const commands = active.commands || []
+  if (menuLoadedSession !== active.id && commands.every((command) => command.kind === 'extension')) {
+    menuLoadedSession = active.id
+    post('loadCommands')
+  }
+  const query = token.toLowerCase()
+  const items = commands.filter((command) => {
+    const name = command.name.toLowerCase()
+    return query === '' || name.includes(query) || command.description.toLowerCase().includes(query)
+  })
+  items.sort((left, right) => rank(left.name, query) - rank(right.name, query))
+  menuState.items = items
+  if (menuState.index >= items.length) menuState.index = Math.max(0, items.length - 1)
+  renderCommandMenu()
+}
+
+function currentCommandToken(textarea) {
+  const before = textarea.value.slice(0, textarea.selectionStart)
+  const match = /(?:^|\s)\/([a-zA-Z0-9_-]*)$/.exec(before)
+  return match ? match[1] : undefined
+}
+
+function rank(name, query) {
+  if (query === '') return 0
+  return name.toLowerCase().startsWith(query) ? 0 : 1
+}
+
+function renderCommandMenu() {
+  const menu = elements.commandMenu
+  if (!menuState || menuState.items.length === 0) {
+    menu.classList.add('hidden')
+    menu.replaceChildren()
+    return
+  }
+  const fragment = document.createDocumentFragment()
+  menuState.items.forEach((command, index) => {
+    const button = node('button', `command-menu-item${index === menuState.index ? ' active' : ''}`)
+    button.type = 'button'
+    button.setAttribute('role', 'option')
+    button.setAttribute('aria-selected', String(index === menuState.index))
+    const name = node('span', 'command-name', `/${command.name}`)
+    const desc = node('span', 'command-desc', command.description)
+    button.append(name, desc)
+    if (command.input?.hint) button.append(node('span', 'command-hint', command.input.hint))
+    button.addEventListener('mousedown', (event) => event.preventDefault())
+    button.addEventListener('click', () => chooseCommand(command))
+    fragment.append(button)
+  })
+  menu.replaceChildren(fragment)
+  menu.classList.remove('hidden')
+}
+
+function chooseCommand(command) {
+  closeCommandMenu()
+  if (command.kind === 'extension') {
+    post('runCommand', { name: command.name })
+    return
+  }
+  insertCommand(command.name)
+}
+
+function insertCommand(name) {
+  elements.prompt.value = `/${name} `
+  resizePrompt()
+  elements.prompt.focus()
+  elements.prompt.setSelectionRange(elements.prompt.value.length, elements.prompt.value.length)
+}
+
+function closeCommandMenu() {
+  menuState = null
+  elements.commandMenu.classList.add('hidden')
+  elements.commandMenu.replaceChildren()
+}
+
 function sendPrompt() {
+  closeCommandMenu()
   const text = elements.prompt.value.trim()
   if (!text && attachments.length === 0) return
   post('sendPrompt', { text, mode: 'queue', images: attachments.map(({ mediaType, data, name }) => ({ mediaType, data, name })) })

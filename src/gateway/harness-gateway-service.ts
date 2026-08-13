@@ -20,11 +20,13 @@ import type { AgentPresetEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { ConfigurationService } from '../config/configuration.js'
 import {
   projectConversation,
+  projectionCommands,
   projectionGoal,
   projectionPermissions,
   projectionPlan,
   projectionTitle,
   sessionListItem,
+  type CommandEntry,
   type HarnessWorkbenchState,
   type PendingApprovalView,
   type PendingQuestionView,
@@ -67,6 +69,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private subagents: SubagentListEntry[] = []
   private subagentAddress: SubagentAddress | undefined
   private projections: Record<string, unknown> = {}
+  private commands: readonly CommandEntry[] = projectionCommands(undefined)
   private phase: HarnessWorkbenchState['phase'] = 'idle'
   private error: string | undefined
   private publishScheduled = false
@@ -155,6 +158,7 @@ export class HarnessGatewayService implements vscode.Disposable {
         subagentMode: this.subagentAddress.mode,
       }),
       ...(permissions === undefined ? {} : { permissions }),
+      commands: this.commands,
       ...(plan === undefined ? {} : { plan }),
       ...(goal === undefined ? {} : { goal }),
     }
@@ -201,6 +205,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.subagentCount = 0
     this.subagents = []
     this.projections = {}
+    this.commands = projectionCommands(undefined)
     this.fireChange()
 
     const client = this.requireClient()
@@ -376,6 +381,21 @@ export class HarnessGatewayService implements vscode.Disposable {
   async selectPermission(value: string): Promise<void> {
     if (value === 'custom') return
     await this.prompt(`/permission ${value}`)
+  }
+
+  /** Refreshes the slash-command menu from the active session's host registration. */
+  async refreshCommands(): Promise<void> {
+    const sessionId = this.activeSessionId
+    if (sessionId === undefined) return
+    const client = this.requireClient()
+    if (!(client instanceof NodeGatewayClient)) return
+    try {
+      this.commands = projectionCommands(await client.listCommands(sessionId))
+    } catch (cause) {
+      this.commands = projectionCommands(undefined)
+      this.output.appendLine(`[gateway] 命令列表刷新失败：${errorMessage(cause)}`)
+    }
+    this.fireChange()
   }
 
   async setPlanMode(active: boolean): Promise<void> {
