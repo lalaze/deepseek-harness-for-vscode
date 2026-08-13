@@ -1,12 +1,12 @@
 # DeepSeek Harness for VS Code
 
-在 VS Code 中原生运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 AI 编码助手扩展。它使用原生的 Codex/Cline 风格对话工作台，不嵌套官方 WebUI，也无需你在本机克隆仓库、安装 Node/npm 或手动部署 Harness —— 安装匹配平台的 VSIX 即可开箱即用。
+在 VS Code 中原生运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 AI 编码助手扩展，无需你在本机克隆仓库、安装 Node/npm 或手动部署 Harness —— 安装匹配平台的 VSIX 即可开箱即用。
 
 > 当前为社区开发版本 `0.3.0`。DeepSeek Harness 仍处于 Developer Preview，本扩展固定使用官方 npm 包 `@deepseek-ai/dsh@0.1.0-rc.6`。
 
 ## ✨ 特性
 
-- **原生 VS Code 会话工作台** — 无 iframe、无外部 WebUI，直接在侧边栏完成全部交互
+- **原生 VS Code 会话工作台** — 直接在侧边栏完成全部交互
 - **完整会话管理** — 持久化历史、新建 / 切换 / 重命名 / 分支会话
 - **多轮对话** — 流式回复、运行中排队、停止生成、历史分页
 - **透明推理过程** — 折叠推理步骤、工具调用与结果时间线
@@ -15,7 +15,7 @@
 - **推理等级** — `off` / `high` / `max`
 - **Agent Preset** — `standard`、`code`（PTC）、`minimal`、`cordis` 四种官方预设
 - **免部署运行时** — 官方 `dsh` 与独立 Node 22.22.3 随 VSIX 分发，生命周期自动管理
-- **安全连接** — 本地随机回环端口启动 Harness Gateway，官方 Web 前端从未加载
+- **安全连接** — 本地随机回环端口启动 Harness Gateway
 
 ## 📦 安装
 
@@ -70,7 +70,7 @@
 
 ## 🔒 安全与隐私
 
-- 扩展只在**本机随机回环端口**启动 Harness Gateway，官方 Web 前端从未加载到扩展中。
+- 扩展只在**本机随机回环端口**启动 Harness Gateway。
 - 工作台使用严格的 Webview CSP。
 - 文件访问受 `permissionMode` 沙箱约束，默认仅允许写入当前工作区。
 - API Key 按需求明文存储于用户级 `settings.json`（`machine` 作用域），不会进入工作区配置。
