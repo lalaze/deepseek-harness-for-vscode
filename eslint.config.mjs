@@ -25,6 +25,7 @@ export default tseslint.config(
         Map: 'readonly',
         Set: 'readonly',
         WeakMap: 'readonly',
+        navigator: 'readonly',
       },
     },
   },
