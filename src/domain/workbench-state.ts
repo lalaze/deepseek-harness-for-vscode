@@ -6,6 +6,7 @@ import type {
   SkillEntry,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { HistoryEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type {} from '@deepseek-ai/dsh-commands/types'
 
 export type ConnectionPhase = 'idle' | 'starting' | 'connected' | 'reconnecting' | 'error'
 
@@ -234,11 +235,37 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
   const messages: ChatItem[] = []
   const finalSteps = new Set<string>()
   const partials = new Map<string, PartialBlocks>()
+  const commandRuns = new Map<string, {
+    readonly seq: number
+    readonly time: number
+    readonly name: string
+    readonly args?: string
+  }>()
+  const commandDones = new Map<string, {
+    readonly seq: number
+    readonly time: number
+    readonly kind: 'success' | 'error'
+    readonly text?: string
+  }>()
   let todos: { readonly content: string; readonly status: string }[] = []
 
   for (const { event } of entries) {
     if (event.type === 'assistant/message') {
       finalSteps.add(stepKey(event.data.turn, event.data.step))
+    } else if (event.type === 'command/run') {
+      commandRuns.set(String(event.data.commandId), {
+        seq: event.seq,
+        time: event.time,
+        name: event.data.name,
+        ...(event.data.args === undefined ? {} : { args: event.data.args }),
+      })
+    } else if (event.type === 'command/done') {
+      commandDones.set(String(event.data.commandId), {
+        seq: event.seq,
+        time: event.time,
+        kind: event.data.kind,
+        ...(event.data.text === undefined ? {} : { text: event.data.text }),
+      })
     }
   }
 
@@ -306,6 +333,28 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
         })
         break
       }
+      case 'command/run': {
+        const commandId = String(event.data.commandId)
+        const done = commandDones.get(commandId)
+        messages.push(commandItem(commandId, {
+          seq: event.seq,
+          time: event.time,
+          name: event.data.name,
+          ...(event.data.args === undefined ? {} : { args: event.data.args }),
+        }, done))
+        break
+      }
+      case 'command/done': {
+        const commandId = String(event.data.commandId)
+        if (commandRuns.has(commandId)) break
+        messages.push(commandItem(commandId, undefined, {
+          seq: event.seq,
+          time: event.time,
+          kind: event.data.kind,
+          ...(event.data.text === undefined ? {} : { text: event.data.text }),
+        }))
+        break
+      }
       case 'todo/write':
         todos = event.data.todos.map((item) => ({ content: item.content, status: item.status }))
         break
@@ -340,6 +389,23 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
   }
   messages.sort((left, right) => left.seq - right.seq)
   return { messages, todos }
+}
+
+function commandItem(
+  commandId: string,
+  run: { readonly seq: number; readonly time: number; readonly name: string; readonly args?: string } | undefined,
+  done: { readonly seq: number; readonly time: number; readonly kind: 'success' | 'error'; readonly text?: string } | undefined,
+): ChatItem {
+  const title = run === undefined ? '斜杠命令' : `/${run.name}${run.args ?? ''}`
+  return {
+    id: `command-${commandId}`,
+    seq: run?.seq ?? done?.seq ?? 0,
+    time: run?.time ?? done?.time ?? 0,
+    kind: 'notice',
+    title,
+    status: done === undefined ? 'running' : done.kind,
+    ...(done?.text === undefined ? {} : { detail: done.text }),
+  }
 }
 
 class PartialBlocks {

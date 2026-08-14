@@ -9,7 +9,7 @@
 - **原生 VS Code 会话工作台** — 直接在侧边栏完成全部交互
 - **完整会话管理** — 持久化历史、新建 / 切换 / 重命名 / 分支会话
 - **多轮对话** — 流式回复、运行中排队、停止生成、历史分页
-- **斜杠命令** — 输入 `/` 弹出官方命令菜单（`/permission`、`/plan`、`/goal`、`/compact`、`/feedback`），支持过滤与键盘导航；`/model`、`/reasoning`、`/preset` 可直接切换会话设置
+- **斜杠命令** — 输入 `/` 弹出官方命令菜单（`/permission`、`/plan`、`/goal`、`/compact`、`/export`、`/feedback`），支持过滤与键盘导航；`/model`、`/reasoning`、`/preset` 可直接切换会话设置
 - **透明推理过程** — 折叠推理步骤、工具调用与结果时间线
 - **Harness 原生能力** — 审批请求、结构化用户问题、Todo 计划、Skills 快捷调用、后台任务状态
 - **模型选择** — DeepSeek V4 Flash / Pro，会话级即时切换

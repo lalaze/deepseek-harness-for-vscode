@@ -48,12 +48,16 @@ const elements = {
 
 let payload
 let currentDetail = 'todos'
-let previousTail = ''
+let renderedSessionId = ''
+const messageSignatures = new WeakMap()
 let attachments = []
 let searchResults = []
 let searchTimer
 let menuState = null
 let menuLoadedSession = null
+let selectorSignature = ''
+let interactionSignature = ''
+let detailSignature = ''
 
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'searchResults') {
@@ -91,7 +95,10 @@ elements.openSettings.addEventListener('click', () => post('openSettings'))
 elements.retry.addEventListener('click', () => post('retry'))
 elements.showLogs.addEventListener('click', () => post('showLogs'))
 elements.loadOlder.addEventListener('click', () => post('loadOlder'))
-elements.detailsToggle.addEventListener('click', () => elements.details.classList.toggle('hidden'))
+elements.detailsToggle.addEventListener('click', () => {
+  elements.details.classList.toggle('hidden')
+  if (!elements.details.classList.contains('hidden')) renderDetails()
+})
 elements.send.addEventListener('click', () => {
   if (payload?.state.active?.running) post('cancel')
   else sendPrompt()
@@ -177,7 +184,7 @@ function render() {
   const { state } = payload
   const active = state.active
   renderPhase(state)
-  renderSessions()
+  if (!elements.historyPanel.classList.contains('hidden')) renderSessions()
   renderSelectors(active)
   elements.keyBanner.classList.toggle('hidden', state.hasApiKey)
   elements.sessionTitle.textContent = active?.title || '新对话'
@@ -187,8 +194,7 @@ function render() {
   elements.loadOlder.classList.toggle('hidden', !active?.hasMore)
   renderMessages(active)
   renderInteractions(active)
-  renderAttachmentRail()
-  renderDetails()
+  if (!elements.details.classList.contains('hidden')) renderDetails()
   renderComposer(active)
   updateCommandMenu()
 }
@@ -233,6 +239,21 @@ function renderSessions() {
 }
 
 function renderSelectors(active) {
+  const nextSignature = JSON.stringify({
+    sessionId: active?.id,
+    phase: payload.state.phase,
+    configuration: payload.configuration,
+    fallbackOptions: payload.fallbackOptions,
+    presets: payload.state.presets,
+    models: active?.models,
+    model: active?.model,
+    agentPreset: active?.agentPreset,
+    parentSessionId: active?.parentSessionId,
+    permissions: active?.permissions,
+    running: active?.running,
+  })
+  if (nextSignature === selectorSignature) return
+  selectorSignature = nextSignature
   const realModels = active?.models || []
   const models = realModels.length > 0
     ? realModels
@@ -293,15 +314,58 @@ function replaceOptions(select, options, selected) {
 }
 
 function renderMessages(active) {
-  const shouldStick = isNearBottom(elements.conversation)
   const messages = active?.messages || []
-  const fragment = document.createDocumentFragment()
-  for (const item of messages) fragment.append(renderMessage(item))
-  elements.messages.replaceChildren(fragment)
+  const sessionId = active?.id || ''
+  const sessionChanged = sessionId !== renderedSessionId
+  const shouldStick = sessionChanged || isNearBottom(elements.conversation)
+  const previousTop = elements.conversation.scrollTop
+  const previousHeight = elements.conversation.scrollHeight
+  const previousFirstId = elements.messages.firstElementChild?.dataset.messageId
+  const existing = new Map([...elements.messages.children].map((element) => [element.dataset.messageId, element]))
+  const retained = new Set()
+  let cursor = elements.messages.firstElementChild
+
+  for (const item of messages) {
+    const id = String(item.id)
+    const signature = messageSignature(item)
+    let element = existing.get(id)
+    if (!element) {
+      element = renderMessage(item)
+      setMessageMetadata(element, id, signature)
+    } else if (messageSignatures.get(element) !== signature) {
+      if (patchStreamingMessage(element, item)) {
+        messageSignatures.set(element, signature)
+      } else {
+        const wasCursor = element === cursor
+        const disclosureState = captureDisclosures(element)
+        const replacement = renderMessage(item)
+        restoreDisclosures(replacement, disclosureState)
+        setMessageMetadata(replacement, id, signature)
+        element.replaceWith(replacement)
+        element = replacement
+        if (wasCursor) cursor = replacement
+      }
+    }
+    retained.add(id)
+    if (element !== cursor) elements.messages.insertBefore(element, cursor)
+    cursor = element.nextElementSibling
+  }
+
+  for (const [id, element] of existing) {
+    if (!retained.has(id)) element.remove()
+  }
   elements.empty.classList.toggle('hidden', messages.length > 0)
-  const tail = messages.at(-1)?.id || ''
-  if (shouldStick || tail !== previousTail) elements.conversation.scrollTop = elements.conversation.scrollHeight
-  previousTail = tail
+  const prepended = !sessionChanged && previousFirstId !== undefined
+    && messages.findIndex((item) => String(item.id) === previousFirstId) > 0
+  if (shouldStick) {
+    elements.conversation.scrollTop = elements.conversation.scrollHeight
+  } else if (prepended) {
+    elements.conversation.scrollTop = previousTop + elements.conversation.scrollHeight - previousHeight
+  } else {
+    // Streaming below the viewport must not steal the reader's position.
+    elements.conversation.scrollTop = previousTop
+  }
+  renderedSessionId = sessionId
 }
 
 function renderMessage(item) {
@@ -317,9 +381,10 @@ function renderMessage(item) {
   const label = node('div', 'message-label', item.role === 'user' ? '你' : 'DeepSeek')
   article.append(label)
   const body = node('div', 'message-body')
-  for (const block of item.blocks || []) {
+  for (const [index, block] of (item.blocks || []).entries()) {
     if (block.kind === 'reasoning') {
       const details = node('details', 'reasoning-block')
+      details.dataset.disclosureKey = `reasoning-${index}`
       details.append(node('summary', '', '推理过程'), node('pre', '', block.text))
       body.append(details)
     } else {
@@ -333,6 +398,7 @@ function renderMessage(item) {
 
 function renderTool(item) {
   const details = node('details', `tool-card ${item.status || ''}`)
+  details.dataset.disclosureKey = 'tool'
   const summary = node('summary')
   summary.append(node('span', 'tool-status'), node('span', 'tool-title', item.title || '工具'))
   details.append(summary)
@@ -342,6 +408,7 @@ function renderTool(item) {
 
 function renderContext(item) {
   const details = node('details', 'context-card')
+  details.dataset.disclosureKey = 'context'
   details.append(node('summary', '', item.title || '上下文'))
   const text = (item.blocks || []).map((block) => block.text).join('\n')
   details.append(node('pre', '', text))
@@ -349,6 +416,13 @@ function renderContext(item) {
 }
 
 function renderInteractions(active) {
+  const nextSignature = JSON.stringify({
+    sessionId: active?.id,
+    approvals: active?.approvals || [],
+    questions: active?.questions || [],
+  })
+  if (nextSignature === interactionSignature) return
+  interactionSignature = nextSignature
   const fragment = document.createDocumentFragment()
   for (const approval of active?.approvals || []) {
     const card = node('section', 'interaction-card warning')
@@ -411,6 +485,19 @@ function renderQuestions(pending) {
 function renderDetails() {
   if (!payload) return
   const active = payload.state.active
+  const nextSignature = JSON.stringify({
+    sessionId: active?.id,
+    currentDetail,
+    todos: active?.todos,
+    plan: active?.plan,
+    goal: active?.goal,
+    skills: active?.skills,
+    subagents: active?.subagents,
+    jobs: active?.jobs,
+    running: active?.running,
+  })
+  if (nextSignature === detailSignature) return
+  detailSignature = nextSignature
   elements.todoCount.textContent = String(active?.todos.length || 0)
   elements.skillCount.textContent = String(active?.skills.length || 0)
   elements.jobCount.textContent = String(active?.jobs.length || 0)
@@ -641,7 +728,10 @@ function resizePrompt() {
 
 function toggleHistory(open) {
   elements.historyPanel.classList.toggle('hidden', !open)
-  if (open) elements.historySearch.focus()
+  if (open) {
+    renderSessions()
+    elements.historySearch.focus()
+  }
 }
 
 function post(type, data = {}) {
@@ -653,6 +743,60 @@ function node(tag, className = '', text = '') {
   if (className) element.className = className
   if (text) element.textContent = text
   return element
+}
+
+function messageSignature(item) {
+  return JSON.stringify(item)
+}
+
+function setMessageMetadata(element, id, signature) {
+  element.dataset.messageId = id
+  messageSignatures.set(element, signature)
+}
+
+/** Mutates only text inside the active assistant card for smooth token flow. */
+function patchStreamingMessage(element, item) {
+  if (item.kind !== 'message' || element.tagName !== 'ARTICLE') return false
+  const body = element.querySelector('.message-body')
+  if (!body) return false
+  const blocks = item.blocks || []
+  const renderedBlocks = [...body.children].filter((child) => !child.classList.contains('typing-indicator'))
+  if (renderedBlocks.length !== blocks.length) return false
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]
+    const rendered = renderedBlocks[index]
+    if (!block || !rendered) return false
+    if (block.kind === 'reasoning') {
+      if (rendered.tagName !== 'DETAILS' || !rendered.classList.contains('reasoning-block')) return false
+      const text = rendered.querySelector('pre')
+      if (!text) return false
+      if (text.textContent !== block.text) text.textContent = block.text
+    } else {
+      if (!rendered.classList.contains('content-block') || !rendered.classList.contains(block.kind)) return false
+      if (rendered.textContent !== block.text) rendered.textContent = block.text
+    }
+  }
+  const indicator = body.querySelector('.typing-indicator')
+  if (item.status === 'running' && !indicator) body.append(node('span', 'typing-indicator', '● ● ●'))
+  else if (item.status !== 'running') indicator?.remove()
+  return true
+}
+
+function captureDisclosures(root) {
+  const state = new Map()
+  for (const details of disclosureElements(root)) state.set(details.dataset.disclosureKey || '', details.open)
+  return state
+}
+
+function restoreDisclosures(root, state) {
+  for (const details of disclosureElements(root)) {
+    details.open = state.get(details.dataset.disclosureKey || '') === true
+  }
+}
+
+function disclosureElements(root) {
+  const descendants = [...root.querySelectorAll('details')]
+  return root.tagName === 'DETAILS' ? [root, ...descendants] : descendants
 }
 
 function isNearBottom(element) {

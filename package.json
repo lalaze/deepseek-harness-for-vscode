@@ -2,7 +2,7 @@
   "name": "deepseek-harness-vscode",
   "displayName": "DeepSeek Harness",
   "description": "原生 DeepSeek Harness VS Code Agent，无 WebUI 嵌套且无需本地部署",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "publisher": "deepseek-harness-community",
   "license": "MIT",

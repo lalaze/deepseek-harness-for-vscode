@@ -73,6 +73,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private phase: HarnessWorkbenchState['phase'] = 'idle'
   private error: string | undefined
   private publishScheduled = false
+  private selectionGeneration = 0
 
   readonly onDidChange = this.changeEmitter.event
 
@@ -105,7 +106,15 @@ export class HarnessGatewayService implements vscode.Disposable {
       const next = requested !== undefined && this.summaries.has(requested)
         ? requested
         : this.orderedSummaries()[0]?.sessionId
-      if (next !== undefined) await this.openSession(String(next))
+      if (next !== undefined) {
+        try {
+          await this.openSession(String(next))
+        } catch (cause) {
+          // One damaged or legacy transcript must not take down the Gateway.
+          // The user can still create a new session and inspect the log.
+          this.output.appendLine(`[gateway] 最近会话加载失败：${errorMessage(cause)}`)
+        }
+      }
       this.phase = 'connected'
     } catch (cause) {
       this.phase = 'error'
@@ -180,6 +189,8 @@ export class HarnessGatewayService implements vscode.Disposable {
     await this.refreshSessionList()
     await this.selectSession(String(created.sessionId))
     await this.selectModel(config.provider, config.model, config.reasoningEffort, false)
+    const permission = projectionPermissions(this.projections.permissions)?.currentValue
+    if (permission !== config.permissionMode) await this.applyPermission(config.permissionMode, false)
     return String(created.sessionId)
   }
 
@@ -193,6 +204,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   async selectSession(sessionId: string): Promise<void> {
     if (!this.summaries.has(sessionId)) await this.refreshSessionList()
     if (!this.summaries.has(sessionId)) throw new Error('找不到该会话。')
+    const generation = ++this.selectionGeneration
     this.activeSessionId = sessionId
     this.subagentAddress = undefined
     this.entries = []
@@ -210,21 +222,47 @@ export class HarnessGatewayService implements vscode.Disposable {
 
     const client = this.requireClient()
     const id = sessionId as SessionId
-    const [history, models, skills, subagents] = await Promise.all([
-      client.sessions.history({ sessionId: id, maxMessages: 80 }),
-      client.sessions.models({ sessionId: id }),
-      client.skills.list({ sessionId: id }),
-      client.subagents.list({ parentSessionId: id }),
-    ])
-    const historyValue = valueOf(history)
-    this.entries = historyValue.events
+
+    // History is persistence-backed and can be rendered without a live Agent.
+    // Load it first so a cold session is useful even if its preset can no
+    // longer be resumed. Mux events received during the read are merged in.
+    const historyValue = valueOf(await client.sessions.history({ sessionId: id, maxMessages: 80 }))
+    if (!this.isCurrentSelection(sessionId, generation)) return
+    this.entries = mergeHistory(historyValue.events, this.entries)
     this.hasMore = historyValue.hasMore
-    this.models = valueOf(models)
-    this.skills = valueOf(skills).skills
-    this.subagents = valueOf(subagents).entries
-    this.subagentCount = this.subagents.length
     this.projections = recordValue(historyValue.projections?.values)
     this.applyTitleProjection(sessionId, projectionTitle(historyValue.projections?.values))
+    this.fireChange()
+
+    // session.models owns the official cold-session resume path. It must
+    // settle before skills.list: the latter intentionally never attaches an
+    // Agent and otherwise races into "not found (not attached)" on startup.
+    try {
+      const models = valueOf(await client.sessions.models({ sessionId: id }))
+      if (!this.isCurrentSelection(sessionId, generation)) return
+      this.models = models
+      this.fireChange()
+    } catch (cause) {
+      this.output.appendLine(`[gateway] 会话 ${sessionId} 的模型目录加载失败：${errorMessage(cause)}`)
+    }
+    if (!this.isCurrentSelection(sessionId, generation)) return
+
+    // These catalogs are independent after resume. A missing optional plugin
+    // degrades only its panel instead of failing the entire workbench.
+    const [skills, subagents, commands] = await Promise.allSettled([
+      client.skills.list({ sessionId: id }),
+      client.subagents.list({ parentSessionId: id }),
+      this.commandsFor(sessionId),
+    ])
+    if (!this.isCurrentSelection(sessionId, generation)) return
+    if (skills.status === 'fulfilled') this.skills = valueOf(skills.value).skills
+    else this.logOptionalCatalogFailure('Skills', skills.reason)
+    if (subagents.status === 'fulfilled') {
+      this.subagents = valueOf(subagents.value).entries
+      this.subagentCount = this.subagents.length
+    } else this.logOptionalCatalogFailure('子 Agent', subagents.reason)
+    if (commands.status === 'fulfilled') this.commands = commands.value
+    else this.logOptionalCatalogFailure('斜杠命令', commands.reason)
     this.fireChange()
   }
 
@@ -275,6 +313,10 @@ export class HarnessGatewayService implements vscode.Disposable {
     if (normalized === '' && images.length === 0) return
     if (this.activeSessionId === undefined) await this.createSession()
     const sessionId = this.requireActiveSession()
+    if (this.subagentAddress === undefined && images.length === 0 && this.isRegisteredHostCommand(normalized)) {
+      await this.executeHostCommand(normalized)
+      return
+    }
     const content: PromptContentPart[] = [
       ...(normalized === '' ? [] : [{ type: 'text' as const, text: normalized }]),
       ...images.map((image) => ({
@@ -380,17 +422,15 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   async selectPermission(value: string): Promise<void> {
     if (value === 'custom') return
-    await this.prompt(`/permission ${value}`)
+    await this.applyPermission(value, true)
   }
 
   /** Refreshes the slash-command menu from the active session's host registration. */
   async refreshCommands(): Promise<void> {
     const sessionId = this.activeSessionId
     if (sessionId === undefined) return
-    const client = this.requireClient()
-    if (!(client instanceof NodeGatewayClient)) return
     try {
-      this.commands = projectionCommands(await client.listCommands(sessionId))
+      this.commands = await this.commandsFor(sessionId)
     } catch (cause) {
       this.commands = projectionCommands(undefined)
       this.output.appendLine(`[gateway] 命令列表刷新失败：${errorMessage(cause)}`)
@@ -399,7 +439,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   async setPlanMode(active: boolean): Promise<void> {
-    await this.prompt(active ? '/plan' : '/plan off')
+    await this.executeHostCommand(active ? '/plan' : '/plan off')
   }
 
   async createGoal(objective: string): Promise<void> {
@@ -568,6 +608,9 @@ export class HarnessGatewayService implements vscode.Disposable {
       if (summary !== undefined) this.summaries.set(id, { ...summary, running: frame.running, blank: frame.running ? false : summary.blank })
     } else if (frame.type === 'host/agent-error') {
       this.output.appendLine(`[agent ${String(frame.sessionId)}] ${frame.message}`)
+    } else if (frame.type === 'host/remote-event'
+      && (frame.event === 'commands/change' || frame.event === 'agent-preset/selected')) {
+      void this.refreshCommands()
     }
     this.fireChange()
   }
@@ -618,6 +661,42 @@ export class HarnessGatewayService implements vscode.Disposable {
     return [...this.summaries.values()].sort((left, right) => right.updatedAt - left.updatedAt)
   }
 
+  private isCurrentSelection(sessionId: string, generation: number): boolean {
+    return this.activeSessionId === sessionId && this.selectionGeneration === generation
+  }
+
+  private async commandsFor(sessionId: string): Promise<readonly CommandEntry[]> {
+    const client = this.requireClient()
+    if (!(client instanceof NodeGatewayClient)) return projectionCommands(undefined)
+    return projectionCommands(await client.listCommands(sessionId))
+  }
+
+  private logOptionalCatalogFailure(name: string, cause: unknown): void {
+    this.output.appendLine(`[gateway] ${name} 目录加载失败：${errorMessage(cause)}`)
+  }
+
+  private async applyPermission(value: string, persist: boolean): Promise<void> {
+    if (value !== 'read-only' && value !== 'workspace-write' && value !== 'danger-full-access') {
+      throw new Error(`未知沙箱权限预设：${value}`)
+    }
+    await this.executeHostCommand(`/permission ${value}`)
+    if (persist) await this.configuration.setPermissionModeIfKnown(value)
+  }
+
+  private isRegisteredHostCommand(line: string): boolean {
+    const name = /^\/([^\s/]+)/u.exec(line)?.[1]
+    return name !== undefined && this.commands.some((command) => command.kind === 'host' && command.name === name)
+  }
+
+  private async executeHostCommand(line: string): Promise<void> {
+    if (this.subagentAddress !== undefined) throw new Error('子 Agent 不支持宿主斜杠命令。')
+    const client = this.requireClient()
+    if (!(client instanceof NodeGatewayClient)) throw new Error('当前 Gateway 不支持宿主斜杠命令。')
+    const execution = await client.executeCommand(this.requireActiveSession(), line)
+    if (execution === undefined) throw new Error(`Harness 无法识别命令：${line}`)
+    if (execution.result?.kind === 'error') throw new Error(execution.result.text ?? `命令执行失败：${line}`)
+  }
+
   private applyTitleProjection(sessionId: string, title: string | undefined): void {
     if (title === undefined) return
     const summary = this.summaries.get(sessionId)
@@ -636,7 +715,10 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   private markConnected(): void {
-    this.phase = 'connected'
+    // During initial bootstrap, both sockets open before the selected cold
+    // session has finished resuming and loading its command catalog. Keep the
+    // composer gated until start() commits the complete baseline.
+    if (this.phase !== 'starting') this.phase = 'connected'
     this.error = undefined
     this.fireChange()
   }
@@ -670,6 +752,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   private disconnect(): void {
+    this.selectionGeneration += 1
     this.streamAbort?.abort()
     this.streamAbort = undefined
     this.client = undefined
@@ -715,6 +798,14 @@ function errorMessage(cause: unknown): string {
 
 function recordValue(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? { ...value } : {}
+}
+
+/** Merge a persistence page with live Mux events that arrived during its read. */
+function mergeHistory(base: readonly HistoryEntry[], live: readonly HistoryEntry[]): HistoryEntry[] {
+  const bySeq = new Map<number, HistoryEntry>()
+  for (const entry of base) bySeq.set(entry.event.seq, entry)
+  for (const entry of live) bySeq.set(entry.event.seq, entry)
+  return [...bySeq.values()].sort((left, right) => left.event.seq - right.event.seq)
 }
 
 function subagentView(entry: SubagentListEntry): SubagentView {

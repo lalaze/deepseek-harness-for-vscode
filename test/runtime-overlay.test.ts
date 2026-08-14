@@ -14,6 +14,7 @@ describe('Harness Web profile overlay', () => {
     expect(overlay).toContain('reasoningEffort: max')
     expect(overlay).toContain('model: deepseek-v4-pro')
     expect(overlay).toContain('default: code')
+    expect(overlay).toContain('defaultPreset: workspace-write')
   })
 
   it('disables thinking and safely quotes custom provider ids', () => {
@@ -27,5 +28,6 @@ describe('Harness Web profile overlay', () => {
     })
     expect(overlay).toContain('thinking: disabled')
     expect(overlay).toContain('provider: "custom: route"')
+    expect(overlay).toContain('defaultPreset: read-only')
   })
 })

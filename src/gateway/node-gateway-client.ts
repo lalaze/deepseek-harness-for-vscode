@@ -21,6 +21,12 @@ export interface HostCommandDescriptor {
   readonly input?: { readonly hint: string }
 }
 
+export interface HostCommandExecution {
+  readonly commandId: string
+  /** RC.6 returns the settled result; newer Hosts may keep admission-only semantics. */
+  readonly result?: { readonly kind: 'success' | 'error'; readonly text?: string }
+}
+
 /**
  * Node transport for the Harness Gateway. Unary calls use the official typed
  * fetch client; event downlinks use `ws` because VS Code's extension host is
@@ -33,7 +39,19 @@ export class NodeGatewayClient extends AbstractApiClient {
 
   /** Lists the slash commands the active Harness deployment registers for one session. */
   async listCommands(sessionId: string): Promise<readonly HostCommandDescriptor[]> {
-    return this.callUnaryRaw<readonly HostCommandDescriptor[]>('commands/list', { agentId: sessionId })
+    // Typert Remote endpoints use the generic Connection `{ args }` carrier;
+    // API Proxy methods use their payload directly. Keeping that envelope here
+    // is what lets the Host interceptor claim commands/list before fallback.
+    return this.callUnaryRaw<readonly HostCommandDescriptor[]>('commands/list', {
+      args: { agentId: sessionId },
+    })
+  }
+
+  /** Executes one registered Host slash command without sending it to the LLM. */
+  async executeCommand(sessionId: string, line: string): Promise<HostCommandExecution | undefined> {
+    return this.callUnaryRaw<HostCommandExecution | undefined>('commands/execute', {
+      args: { agentId: sessionId, line },
+    })
   }
 
   /**

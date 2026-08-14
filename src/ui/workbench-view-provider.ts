@@ -16,6 +16,8 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
   private view: vscode.WebviewView | undefined
   private readonly subscriptions: vscode.Disposable[]
+  private publishing: Promise<void> | undefined
+  private publishPending = false
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -23,7 +25,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     private readonly gateway: HarnessGatewayService,
     private readonly actions: WorkbenchViewActions,
   ) {
-    this.subscriptions = [gateway.onDidChange(() => { void this.publishState() })]
+    this.subscriptions = [gateway.onDidChange(() => {
+      void this.publishState().catch(() => undefined)
+    })]
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -50,18 +54,35 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     for (const subscription of this.subscriptions) subscription.dispose()
   }
 
-  private async publishState(): Promise<void> {
-    const state = await this.gateway.snapshot()
-    await this.view?.webview.postMessage({
-      type: 'state',
-      state,
-      configuration: this.configuration.get(),
-      fallbackOptions: {
-        models: MODEL_OPTIONS,
-        reasoning: REASONING_OPTIONS,
-        presets: AGENT_PRESET_OPTIONS,
-      },
+  private publishState(): Promise<void> {
+    // Gateway frames can arrive every few milliseconds. Serialize snapshots
+    // so an older async credentials read can never overtake a newer state and
+    // make streamed text visibly jump backwards/forwards.
+    this.publishPending = true
+    if (this.publishing !== undefined) return this.publishing
+    const task = this.drainPublishQueue()
+    this.publishing = task.finally(() => {
+      this.publishing = undefined
+      if (this.publishPending) void this.publishState().catch(() => undefined)
     })
+    return this.publishing
+  }
+
+  private async drainPublishQueue(): Promise<void> {
+    while (this.publishPending) {
+      this.publishPending = false
+      const state = await this.gateway.snapshot()
+      await this.view?.webview.postMessage({
+        type: 'state',
+        state,
+        configuration: this.configuration.get(),
+        fallbackOptions: {
+          models: MODEL_OPTIONS,
+          reasoning: REASONING_OPTIONS,
+          presets: AGENT_PRESET_OPTIONS,
+        },
+      })
+    }
   }
 
   private async handleMessage(value: unknown): Promise<void> {

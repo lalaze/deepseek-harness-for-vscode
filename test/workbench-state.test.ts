@@ -45,6 +45,24 @@ describe('projectConversation', () => {
     expect(projectConversation(finalized).messages).toHaveLength(1)
     expect(projectConversation(finalized).messages[0]?.blocks).toEqual([{ kind: 'text', text: '最终' }])
   })
+
+  it('pairs slash-command lifecycle events into one visible result row', () => {
+    const entries = [
+      entry(4, 'command/run', {
+        commandId: 'cmd-1', name: 'permission', args: ' read-only', source: { kind: 'user' },
+      }),
+      entry(5, 'command/done', {
+        commandId: 'cmd-1', kind: 'success', text: 'preset read-only',
+      }),
+    ] as HistoryEntry[]
+
+    expect(projectConversation(entries).messages).toEqual([expect.objectContaining({
+      id: 'command-cmd-1',
+      title: '/permission read-only',
+      status: 'success',
+      detail: 'preset read-only',
+    })])
+  })
 })
 
 describe('projectionCommands', () => {

@@ -24,6 +24,7 @@ export default tseslint.config(
         setTimeout: 'readonly',
         Map: 'readonly',
         Set: 'readonly',
+        WeakMap: 'readonly',
       },
     },
   },

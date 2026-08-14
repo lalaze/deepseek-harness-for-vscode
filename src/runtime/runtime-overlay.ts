@@ -16,5 +16,9 @@ export function renderOverlay(configuration: HarnessConfiguration): string {
 \n\
 - id: agent-presets\n\
   config:\n\
-    default: ${configuration.agentPreset}\n`
+    default: ${configuration.agentPreset}\n\
+\n\
+- id: permission\n\
+  config:\n\
+    defaultPreset: ${configuration.permissionMode}\n`
 }

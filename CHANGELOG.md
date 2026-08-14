@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1
+
+- 修复冷会话恢复时 `skills.list` 抢先执行导致的 `session not found (not attached)` 启动异常；可选目录失败不再拖垮整个工作台。
+- 对话消息改为按 ID 增量更新，流式文本在原节点内追加；推理和工具卡的展开状态、用户滚动位置不再因新分片丢失。
+- 修复斜杠命令传输协议：官方命令改走 `commands/execute`，不再被误发给模型，并在对话中显示持久命令回执。
+- 权限选择现在真实写入 `permission/preset`、`sandbox/mode` 与 `approval/policy`，同时保存为本机新会话默认值。
+
 ## 0.4.0
 
 - 输入框支持 `/` 斜杠命令菜单：输入 `/` 弹出官方命令列表（`/compact`、`/feedback`、`/goal`、`/permission`、`/plan`），支持过滤、键盘导航与一键插入。

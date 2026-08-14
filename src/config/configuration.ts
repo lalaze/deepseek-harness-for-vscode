@@ -65,6 +65,10 @@ export class ConfigurationService implements vscode.Disposable {
     return this.update('agentPreset', value)
   }
 
+  setPermissionMode(value: PermissionMode): Thenable<void> {
+    return this.update('permissionMode', value)
+  }
+
   /** Persist a Gateway-owned model only when it is part of this extension's supported defaults. */
   async setModelIfKnown(value: string): Promise<void> {
     if (MODEL_OPTIONS.some((option) => option.id === value)) await this.setModel(value as ModelId)
@@ -79,6 +83,12 @@ export class ConfigurationService implements vscode.Disposable {
   async setAgentPresetIfKnown(value: string): Promise<void> {
     if (AGENT_PRESET_OPTIONS.some((option) => option.id === value)) {
       await this.setAgentPreset(value as AgentPresetId)
+    }
+  }
+
+  async setPermissionModeIfKnown(value: string): Promise<void> {
+    if (value === 'read-only' || value === 'workspace-write' || value === 'danger-full-access') {
+      await this.setPermissionMode(value)
     }
   }
 
