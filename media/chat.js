@@ -40,6 +40,7 @@ const elements = {
   prompt: byId('prompt'),
   commandMenu: byId('command-menu'),
   attach: byId('attach'),
+  attachSelection: byId('attach-selection'),
   imageInput: byId('image-input'),
   attachmentRail: byId('attachment-rail'),
   send: byId('send'),
@@ -65,6 +66,10 @@ window.addEventListener('message', (event) => {
       searchResults = event.data.results
       renderSessions()
     }
+    return
+  }
+  if (event.data?.type === 'selectionAttached') {
+    insertSelection(event.data)
     return
   }
   if (event.data?.type !== 'state') return
@@ -150,6 +155,7 @@ elements.prompt.addEventListener('blur', () => {
   setTimeout(() => { if (!elements.commandMenu.matches(':hover')) closeCommandMenu() }, 120)
 })
 elements.attach.addEventListener('click', () => elements.imageInput.click())
+elements.attachSelection.addEventListener('click', () => post('attachSelection'))
 elements.imageInput.addEventListener('change', async () => {
   const files = [...elements.imageInput.files]
   elements.imageInput.value = ''
@@ -387,6 +393,11 @@ function renderMessage(item) {
       details.dataset.disclosureKey = `reasoning-${index}`
       details.append(node('summary', '', '推理过程'), node('pre', '', block.text))
       body.append(details)
+    } else if (block.kind === 'text' && (item.role === 'user' || item.role === 'assistant')) {
+      const content = node('div', 'content-block md')
+      content.dataset.mdText = block.text
+      content.append(renderMarkdown(block.text))
+      body.append(content)
     } else {
       body.append(node('div', `content-block ${block.kind}`, block.text))
     }
@@ -587,9 +598,24 @@ function renderComposer(active) {
   elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '' && attachments.length === 0)
   elements.send.textContent = active?.running ? '■' : '↑'
   elements.send.title = active?.running ? '停止生成' : '发送 (Enter)'
-  elements.composerStatus.textContent = active?.subagentMode === 'one-shot'
+  const usageText = tokenUsageText(active?.tokenUsage)
+  elements.composerStatus.textContent = (active?.subagentMode === 'one-shot'
     ? '一次性子 Agent · 只读'
-    : active?.running ? '运行中 · Enter 加入队列' : active?.model?.model || (active?.subagentMode === 'continuable' ? '可继续子 Agent' : '')
+    : active?.running ? '运行中 · Enter 加入队列' : active?.model?.model || (active?.subagentMode === 'continuable' ? '可继续子 Agent' : '')) + usageText
+}
+
+function tokenUsageText(usage) {
+  if (!usage) return ''
+  const input = usage.uncachedInputTokens + usage.cacheReadTokens
+  const output = usage.outputTokens
+  if (input === 0 && output === 0) return ''
+  return ` · ↑${formatTokens(input)} / ↓${formatTokens(output)}`
+}
+
+function formatTokens(count) {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`
+  return String(count)
 }
 
 function updateCommandMenu() {
@@ -773,7 +799,16 @@ function patchStreamingMessage(element, item) {
       if (text.textContent !== block.text) text.textContent = block.text
     } else {
       if (!rendered.classList.contains('content-block') || !rendered.classList.contains(block.kind)) return false
-      if (rendered.textContent !== block.text) rendered.textContent = block.text
+      if (rendered.classList.contains('md')) {
+        // Markdown-rendered block: rebuild the fragment in place when the raw
+        // text changed (it grows during streaming).
+        if (rendered.dataset.mdText !== block.text) {
+          rendered.replaceChildren(renderMarkdown(block.text))
+          rendered.dataset.mdText = block.text
+        }
+      } else if (rendered.textContent !== block.text) {
+        rendered.textContent = block.text
+      }
     }
   }
   const indicator = body.querySelector('.typing-indicator')
@@ -813,6 +848,191 @@ function formatRelativeTime(time) {
 
 function cssEscape(value) {
   return window.CSS?.escape ? window.CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
+}
+
+// ---------- Markdown rendering (XSS-safe: every text node via textContent) ----------
+
+function renderMarkdown(text) {
+  const fragment = document.createDocumentFragment()
+  const lines = text.split(/\r?\n/)
+  let paragraph = []
+  let list = null
+  let listOrdered = false
+  let code = null // { lang, lines }
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return
+    const p = node('p', 'md-paragraph')
+    p.append(renderInline(paragraph.join(' ')))
+    fragment.append(p)
+    paragraph = []
+  }
+  const flushList = () => {
+    if (list === null) return
+    const wrap = node(listOrdered ? 'ol' : 'ul', 'md-list')
+    for (const item of list) wrap.append(item)
+    fragment.append(wrap)
+    list = null
+  }
+  const flushCode = () => {
+    if (code === null) return
+    const wrap = node('div', 'md-codeblock')
+    const header = node('div', 'md-codeblock-header')
+    header.append(node('span', 'md-codeblock-lang', code.lang || '代码'))
+    const copy = node('button', 'md-copy', '复制')
+    copy.type = 'button'
+    copy.addEventListener('click', () => copyText(code.lines.join('\n')))
+    header.append(copy)
+    const pre = node('pre')
+    const inner = node('code')
+    inner.textContent = code.lines.join('\n')
+    pre.append(inner)
+    wrap.append(header, pre)
+    fragment.append(wrap)
+    code = null
+  }
+
+  for (const raw of lines) {
+    if (code !== null) {
+      if (/^\s*```\s*$/.test(raw)) flushCode()
+      else code.lines.push(raw)
+      continue
+    }
+    const fenceOpen = /^\s*```([\w+-]*)\s*$/.exec(raw)
+    if (fenceOpen) {
+      flushParagraph()
+      flushList()
+      code = { lang: fenceOpen[1] || '', lines: [] }
+      continue
+    }
+    const heading = /^(#{1,4})\s+(.*)$/.exec(raw)
+    if (heading) {
+      flushParagraph()
+      flushList()
+      const h = node(`h${Math.min(heading[1].length + 1, 4)}`, 'md-heading')
+      h.append(renderInline(heading[2]))
+      fragment.append(h)
+      continue
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(raw)) {
+      flushParagraph()
+      flushList()
+      fragment.append(node('hr', 'md-hr'))
+      continue
+    }
+    const quote = /^>\s?(.*)$/.exec(raw)
+    if (quote) {
+      flushParagraph()
+      flushList()
+      const q = node('blockquote', 'md-quote')
+      q.append(renderInline(quote[1]))
+      fragment.append(q)
+      continue
+    }
+    const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(raw)
+    if (item) {
+      flushParagraph()
+      if (list === null) {
+        list = []
+        listOrdered = /^\s*\d+/.test(raw)
+      }
+      const li = node('li', 'md-list-item')
+      li.append(renderInline(item[1]))
+      list.push(li)
+      continue
+    }
+    if (raw.trim() === '') {
+      flushParagraph()
+      flushList()
+      continue
+    }
+    paragraph.push(raw.trim())
+  }
+  flushParagraph()
+  flushList()
+  flushCode()
+  return fragment
+}
+
+// Only http(s) links are recognized; everything else stays plain text.
+const INLINE_TOKEN = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`\n]+`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g
+
+function renderInline(text) {
+  const fragment = document.createDocumentFragment()
+  let last = 0
+  let match
+  INLINE_TOKEN.lastIndex = 0
+  while ((match = INLINE_TOKEN.exec(text)) !== null) {
+    if (match.index > last) fragment.append(document.createTextNode(text.slice(last, match.index)))
+    const token = match[0]
+    if (token.startsWith('**')) {
+      fragment.append(node('strong', 'md-strong', token.slice(2, -2)))
+    } else if (token.startsWith('`')) {
+      fragment.append(node('code', 'md-inline-code', token.slice(1, -1)))
+    } else if (token.startsWith('[')) {
+      const close = token.lastIndexOf('](')
+      const label = token.slice(1, close)
+      const url = token.slice(close + 2, -1)
+      const link = node('a', 'md-link', label)
+      link.href = url
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      link.addEventListener('click', (event) => {
+        event.preventDefault()
+        post('openExternal', { url })
+      })
+      fragment.append(link)
+    } else {
+      fragment.append(node('em', 'md-em', token.slice(1, -1)))
+    }
+    last = match.index + token.length
+  }
+  if (last < text.length) fragment.append(document.createTextNode(text.slice(last)))
+  return fragment
+}
+
+function copyText(text) {
+  if (navigator.clipboard?.writeText !== undefined) {
+    navigator.clipboard.writeText(text).catch(() => legacyCopy(text))
+  } else {
+    legacyCopy(text)
+  }
+}
+
+function legacyCopy(text) {
+  const area = document.createElement('textarea')
+  area.value = text
+  area.style.position = 'fixed'
+  area.style.opacity = '0'
+  document.body.append(area)
+  area.select()
+  try {
+    document.execCommand('copy')
+  } catch {
+    // Clipboard unavailable; the user can still select the text manually.
+  }
+  area.remove()
+}
+
+// Uses the same `[选区: ` header as the host-side auto-attach marker
+// (SELECTION_MARKER_PREFIX in harness-gateway-service.ts) so the duplicate
+// detection in the extension host recognizes a manual insert.
+function insertSelection(selection) {
+  if (!selection || !selection.text) return
+  const fileName = selection.file ? selection.file.split(/[\\/]/).pop() : '选区'
+  const ext = fileName.includes('.') ? fileName.split('.').pop() : ''
+  const range = selection.startLine !== undefined && selection.endLine !== undefined
+    ? ` (${selection.startLine}-${selection.endLine} 行)`
+    : ''
+  const snippet = `[选区: ${fileName}${range}${selection.tooLong ? '（已截断）' : ''}]:\n\`\`\`${ext}\n${selection.text}\n\`\`\`\n\n`
+  const prompt = elements.prompt
+  const start = prompt.selectionStart ?? prompt.value.length
+  const end = prompt.selectionEnd ?? start
+  prompt.value = prompt.value.slice(0, start) + snippet + prompt.value.slice(end)
+  resizePrompt()
+  renderComposer(payload?.state.active)
+  prompt.focus()
+  prompt.setSelectionRange(prompt.value.length, prompt.value.length)
 }
 
 vscode.postMessage({ type: 'ready' })

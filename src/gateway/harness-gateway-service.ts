@@ -25,6 +25,7 @@ import {
   projectionPermissions,
   projectionPlan,
   projectionTitle,
+  projectionTokenUsage,
   sessionListItem,
   type CommandEntry,
   type HarnessWorkbenchState,
@@ -139,6 +140,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     const permissions = projectionPermissions(this.projections.permissions)
     const plan = projectionPlan(this.projections.plan)
     const goal = projectionGoal(this.projections.goal)
+    const tokenUsage = projectionTokenUsage(this.projections.tokenUsage)
     const active = activeSummary === undefined ? undefined : {
       id: String(activeSummary.sessionId),
       title: sessionListItem(activeSummary).title,
@@ -170,6 +172,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       commands: this.commands,
       ...(plan === undefined ? {} : { plan }),
       ...(goal === undefined ? {} : { goal }),
+      ...(tokenUsage === undefined ? {} : { tokenUsage }),
     }
     return {
       phase: this.phase,
@@ -308,9 +311,10 @@ export class HarnessGatewayService implements vscode.Disposable {
     text: string,
     mode: 'queue' | 'steer' = 'queue',
     images: readonly PromptImage[] = [],
+    selection?: PromptSelection,
   ): Promise<void> {
     const normalized = text.trim()
-    if (normalized === '' && images.length === 0) return
+    if (normalized === '' && images.length === 0 && selection === undefined) return
     if (this.activeSessionId === undefined) await this.createSession()
     const sessionId = this.requireActiveSession()
     if (this.subagentAddress === undefined && images.length === 0 && this.isRegisteredHostCommand(normalized)) {
@@ -318,6 +322,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       return
     }
     const content: PromptContentPart[] = [
+      ...(selection === undefined ? [] : [selectionPart(selection)]),
       ...(normalized === '' ? [] : [{ type: 'text' as const, text: normalized }]),
       ...images.map((image) => ({
         type: 'image' as const,
@@ -773,6 +778,35 @@ export interface PromptImage {
   readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
   readonly data: string
   readonly name?: string
+}
+
+/** A snapshot of the active editor selection attached as prompt context. */
+export interface PromptSelection {
+  readonly file?: string
+  readonly text: string
+  readonly startLine?: number
+  readonly endLine?: number
+  readonly tooLong?: boolean
+}
+
+/**
+ * Single selection header format shared with the webview's manual insert
+ * (media/chat.js insertSelection) so duplicate detection only has to match
+ * one marker prefix.
+ */
+export const SELECTION_MARKER_PREFIX = '[选区: '
+
+function selectionPart(selection: PromptSelection): PromptContentPart {
+  const name = selection.file === undefined ? '选区' : selection.file.split(/[\\/]/u).pop() ?? '选区'
+  const ext = name.includes('.') ? name.split('.').pop() ?? '' : ''
+  const range = selection.startLine !== undefined && selection.endLine !== undefined
+    ? ` (${selection.startLine}-${selection.endLine} 行)`
+    : ''
+  const truncated = selection.tooLong === true ? '（已截断）' : ''
+  return {
+    type: 'text',
+    text: `${SELECTION_MARKER_PREFIX}${name}${range}${truncated}]\n\`\`\`${ext}\n${selection.text}\n\`\`\``,
+  }
 }
 
 function valueOf<T>(response: RpcResponse<T>): T {
