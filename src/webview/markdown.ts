@@ -9,9 +9,8 @@ const markdown = new MarkdownIt({
   maxNesting: 40,
 })
 
-// Remote Markdown images are intentionally disabled. Attachments already have
-// a trusted Harness transport, while arbitrary image URLs would add a privacy
-// leak and are blocked by the Webview CSP anyway.
+// Remote Markdown images are intentionally disabled: arbitrary image URLs
+// would add a privacy leak and are blocked by the Webview CSP anyway.
 markdown.disable('image')
 
 const SANITIZE_OPTIONS: Config = {

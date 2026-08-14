@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import * as vscode from 'vscode'
 import type { ConfigurationService } from '../config/configuration.js'
 import { AGENT_PRESET_OPTIONS, MODEL_OPTIONS, REASONING_OPTIONS } from '../domain/options.js'
+import { promptConfiguration } from '../domain/prompt-configuration.js'
 import { selectionMarkerPrefix, type HarnessGatewayService, type PromptSelection } from '../gateway/harness-gateway-service.js'
 import { localizeWebviewMessages, type WebviewMessageKey } from '../webview/localization.js'
 
@@ -132,29 +133,20 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         break
       case 'sendPrompt': {
         const text = typeof value.text === 'string' ? value.text : ''
+        const staged = promptConfiguration(value.configuration)
+        if (value.configuration !== undefined && staged === undefined) {
+          throw new Error(vscode.l10n.t('Invalid model or mode configuration.'))
+        }
+        if (staged !== undefined) await this.gateway.applyPromptConfiguration(staged)
         await this.gateway.prompt(
           text,
           value.mode === 'steer' ? 'steer' : 'queue',
-          promptImages(value.images),
           this.configuration.get().autoAttachSelection ? autoSelection(text) : undefined,
         )
         break
       }
       case 'cancel':
         await this.gateway.cancel()
-        break
-      case 'setModel':
-        await this.gateway.selectModel(
-          requiredString(value, 'provider'),
-          requiredString(value, 'model'),
-          optionalString(value.reasoningEffort),
-        )
-        break
-      case 'setReasoning':
-        await this.gateway.selectReasoning(requiredString(value, 'value'))
-        break
-      case 'setPreset':
-        await this.gateway.selectPreset(requiredString(value, 'value'))
         break
       case 'setPermission':
         await this.gateway.selectPermission(requiredString(value, 'value'))
@@ -175,9 +167,6 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       }
       case 'loadCommands':
         await this.gateway.refreshCommands()
-        break
-      case 'runCommand':
-        await this.runCommand(requiredString(value, 'name'))
         break
       case 'setPlan':
         await this.gateway.setPlanMode(value.active === true)
@@ -220,70 +209,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     }
   }
 
-  private async runCommand(name: string): Promise<void> {
-    if (name === 'model') await this.pickModel()
-    else if (name === 'reasoning') await this.pickReasoning()
-    else if (name === 'preset') await this.pickPreset()
-  }
-
-  private async pickModel(): Promise<void> {
-    const current = await this.gateway.snapshot()
-    const models = current.active?.models ?? []
-    const items: ModelPickItem[] = models.map((model) => ({
-      label: model.name,
-      description: model.provider,
-      ...(model.description === undefined ? {} : { detail: model.description }),
-      picked: model.id === current.active?.model?.model && model.provider === current.active?.model?.provider,
-      provider: model.provider,
-      id: model.id,
-    }))
-    const selected = await vscode.window.showQuickPick(items, {
-      title: vscode.l10n.t('Switch model'),
-      placeHolder: vscode.l10n.t('Select the model for the current session'),
-    })
-    if (selected !== undefined) {
-      const reasoning = current.active?.model?.reasoningEffort
-      await this.gateway.selectModel(selected.provider, selected.id, reasoning)
-    }
-  }
-
-  private async pickReasoning(): Promise<void> {
-    const items: ValuePickItem[] = REASONING_OPTIONS.map((item) => ({
-      label: vscode.l10n.t(item.label),
-      ...(item.description === undefined ? {} : { detail: vscode.l10n.t(item.description) }),
-      value: item.id,
-    }))
-    const selected = await vscode.window.showQuickPick(items, {
-      title: vscode.l10n.t('Switch reasoning effort'),
-      placeHolder: vscode.l10n.t('Select the reasoning effort for the current session'),
-    })
-    if (selected !== undefined) await this.gateway.selectReasoning(selected.value)
-  }
-
-  private async pickPreset(): Promise<void> {
-    const current = await this.gateway.snapshot()
-    const items: ValuePickItem[] = current.presets.length > 0
-      ? current.presets.filter((item) => !item.broken).map((item) => ({
-        label: item.name || item.id,
-        ...(item.description === undefined ? {} : { detail: item.description }),
-        value: item.id,
-      }))
-      : AGENT_PRESET_OPTIONS.map((item) => ({
-        label: vscode.l10n.t(item.label),
-        ...(item.description === undefined ? {} : { detail: vscode.l10n.t(item.description) }),
-        value: item.id,
-      }))
-    const selected = await vscode.window.showQuickPick(items, {
-      title: vscode.l10n.t('Switch Agent Preset'),
-      placeHolder: vscode.l10n.t('Select the Agent Preset for the current session'),
-    })
-    if (selected !== undefined) await this.gateway.selectPreset(selected.value)
-  }
-
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(18).toString('base64')
     const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'chat.js'))
     const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'chat.css'))
+    const logo = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'deepseek-harness.png'))
     const messages = localizeWebviewMessages((message) => vscode.l10n.t(message))
     const text = (key: WebviewMessageKey): string => escapeHtml(messages[key])
     const language = escapeHtml(vscode.env.language)
@@ -301,7 +231,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
   <header class="shell-header">
     <div class="brand-row">
       <button id="history-toggle" class="icon-button" title="${text('history')}" aria-label="${text('history')}">☰</button>
-      <div class="brand"><span class="brand-mark">DS</span><strong>Harness</strong><span id="connection" class="connection"></span></div>
+      <div class="brand"><img class="brand-logo" src="${logo}" alt=""><strong>Harness</strong><span id="connection" class="connection"></span></div>
       <div class="header-actions">
         <button id="new-session" class="icon-button" title="${text('newConversation')}" aria-label="${text('newConversation')}">＋</button>
         <button id="open-settings" class="icon-button" title="${text('extensionSettings')}" aria-label="${text('extensionSettings')}">⚙</button>
@@ -311,11 +241,6 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <button id="back-parent" class="icon-button compact hidden" title="${text('backToParentAgent')}" aria-label="${text('backToParentAgent')}">←</button>
       <button id="session-title" class="title-button" title="${text('renameConversation')}">${text('newConversation')}</button>
       <button id="fork" class="icon-button compact" title="${text('forkConversation')}" aria-label="${text('forkConversation')}">⑂</button>
-    </div>
-    <div class="selectors" aria-label="${text('sessionSettings')}">
-      <label><span>${text('model')}</span><select id="model"></select></label>
-      <label><span>${text('reasoning')}</span><select id="reasoning"></select></label>
-      <label><span>${text('agent')}</span><select id="preset"></select></label>
     </div>
   </header>
 
@@ -342,7 +267,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <div id="conversation" class="conversation">
         <button id="load-older" class="load-older hidden">${text('loadOlder')}</button>
         <section id="empty" class="empty-state">
-          <div class="empty-mark">DS</div><h2>${text('emptyTitle')}</h2><p>${text('emptyDescription')}</p>
+          <img class="empty-logo" src="${logo}" alt=""><h2>${text('emptyTitle')}</h2><p>${text('emptyDescription')}</p>
         </section>
         <div id="messages" class="messages" aria-live="polite"></div>
       </div>
@@ -360,17 +285,58 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
       <div id="interactions" class="interactions"></div>
       <section class="composer-shell">
+        <section id="configuration-panel" class="configuration-panel hidden" role="dialog" aria-label="${text('configurationTitle')}">
+          <header class="configuration-panel-header">
+            <strong>${text('configurationTitle')}</strong>
+            <button id="configuration-close" class="icon-button compact" type="button" title="${text('configurationClose')}" aria-label="${text('configurationClose')}">×</button>
+          </header>
+          <div class="configuration-panel-scroll">
+            <section class="configuration-group configuration-model-group" aria-labelledby="configuration-models-label">
+              <h3 id="configuration-models-label">${text('configurationModels')}</h3>
+              <div id="configuration-models" class="configuration-options" role="listbox"></div>
+            </section>
+            <section class="configuration-group" aria-labelledby="configuration-modes-label">
+              <h3 id="configuration-modes-label">${text('configurationModes')}</h3>
+              <div id="configuration-presets" class="configuration-options" role="listbox"></div>
+            </section>
+          </div>
+          <footer id="effort-control" class="effort-control" data-effort="high">
+            <div class="effort-main">
+              <div class="effort-heading"><span>${text('configurationEffort')}</span><strong id="effort-value"></strong></div>
+              <div class="effort-slider-row">
+                <input id="effort-slider" type="range" min="0" max="2" step="1" value="1" aria-label="${text('configurationEffort')}">
+                <div id="effort-ticks" class="effort-ticks"></div>
+              </div>
+            </div>
+            <p id="configuration-hint">${text('configurationAppliesNextMessage')}</p>
+          </footer>
+        </section>
         <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="${text('slashCommands')}"></div>
-        <div id="attachment-rail" class="attachment-rail hidden"></div>
         <textarea id="prompt" rows="1" placeholder="${text('promptPlaceholder')}" aria-label="${text('message')}"></textarea>
         <div class="composer-bar">
-          <button id="attach" class="text-button" title="${text('addImage')}">＋ ${text('image')}</button>
-          <input id="image-input" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
-          <button id="attach-selection" class="text-button" title="${text('attachSelection')}">⬒ ${text('selection')}</button>
-          <button id="details-toggle" class="text-button" title="${text('contextDescription')}">${text('context')}</button>
-          <select id="permission" class="permission-select hidden" title="${text('permissionDescription')}"></select>
-          <span id="composer-status" class="composer-status"></span>
-          <button id="send" class="send-button" title="${text('sendTitle')}" aria-label="${text('send')}">↑</button>
+          <div class="composer-tools">
+            <button id="attach-selection" class="text-button" title="${text('attachSelection')}">⬒ ${text('selection')}</button>
+            <button id="details-toggle" class="text-button" title="${text('contextDescription')}">${text('context')}</button>
+            <select id="permission" class="permission-select hidden" title="${text('permissionDescription')}"></select>
+          </div>
+          <div class="composer-meta">
+            <span id="composer-status" class="composer-status"></span>
+            <span id="context-meter" class="context-meter hidden" role="img">
+              <span class="context-meter-ring" aria-hidden="true"></span>
+              <span id="context-meter-value" class="context-meter-value"></span>
+            </span>
+          </div>
+          <div class="composer-actions">
+            <button id="configuration-toggle" class="configuration-toggle" type="button" title="${text('configurationOpen')}" aria-label="${text('configurationOpen')}" aria-expanded="false" aria-controls="configuration-panel" disabled>
+              <span class="configuration-toggle-icon">◈</span>
+              <span class="configuration-toggle-copy">
+                <strong id="configuration-toggle-model">${text('model')}</strong>
+                <small id="configuration-toggle-mode">${text('agent')}</small>
+              </span>
+              <span class="configuration-toggle-chevron">⌃</span>
+            </button>
+            <button id="send" class="send-button" title="${text('sendTitle')}" aria-label="${text('send')}">↑</button>
+          </div>
         </div>
       </section>
       <p class="composer-hint">${text('composerHint')}</p>
@@ -387,15 +353,6 @@ function requiredString(value: Record<string, unknown>, key: string): string {
   const item = value[key]
   if (typeof item !== 'string' || item.trim() === '') throw new Error(vscode.l10n.t('Invalid {0}.', key))
   return item
-}
-
-interface ModelPickItem extends vscode.QuickPickItem {
-  readonly provider: string
-  readonly id: string
-}
-
-interface ValuePickItem extends vscode.QuickPickItem {
-  readonly value: string
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -416,23 +373,6 @@ function questionAnswers(value: unknown): { readonly id: string; readonly select
     const custom = optionalString(item.custom)
     return { id: item.id, selected, ...(custom === undefined ? {} : { custom }) }
   })
-}
-
-function promptImages(value: unknown): { readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; readonly data: string; readonly name?: string }[] {
-  if (value === undefined) return []
-  if (!Array.isArray(value) || value.length > 8) throw new Error(vscode.l10n.t('Invalid image attachment format.'))
-  return value.map((item) => {
-    if (!isRecord(item) || !isImageType(item.mediaType) || typeof item.data !== 'string') {
-      throw new Error(vscode.l10n.t('Invalid image attachment format.'))
-    }
-    if (item.data.length > 16_000_000) throw new Error(vscode.l10n.t('Each image must be approximately 12 MB or smaller.'))
-    const name = optionalString(item.name)
-    return { mediaType: item.mediaType, data: item.data, ...(name === undefined ? {} : { name }) }
-  })
-}
-
-function isImageType(value: unknown): value is 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
-  return value === 'image/png' || value === 'image/jpeg' || value === 'image/webp' || value === 'image/gif'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

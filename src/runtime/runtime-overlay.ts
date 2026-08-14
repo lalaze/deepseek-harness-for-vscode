@@ -20,5 +20,22 @@ export function renderOverlay(configuration: HarnessConfiguration): string {
 \n\
 - id: permission\n\
   config:\n\
+    # Patch rows replace their complete config, so restate every shipped preset.\n\
+    presets:\n\
+      read-only:\n\
+        sandbox: read-only\n\
+        approval: ask\n\
+        name: Read only\n\
+        description: Prevent file writes while keeping approval prompts enabled.\n\
+      workspace-write:\n\
+        sandbox: workspace-write\n\
+        approval: ask\n\
+        name: Workspace write\n\
+        description: Allow workspace and temporary-directory writes with approval for wider access.\n\
+      danger-full-access:\n\
+        sandbox: danger-full-access\n\
+        approval: never\n\
+        name: Full access\n\
+        description: Allow unrestricted file writes without approval prompts.\n\
     defaultPreset: ${configuration.permissionMode}\n`
 }

@@ -2,10 +2,11 @@
   "name": "deepseek-harness-for-vscode",
   "displayName": "DeepSeek Harness for Visual Studio Code",
   "description": "%extension.description%",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "type": "module",
   "publisher": "skymecode",
   "license": "MIT",
+  "icon": "media/deepseek-harness.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/skymecode/deepseek-harness-for-vscode.git"

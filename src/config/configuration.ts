@@ -10,8 +10,13 @@ import {
   type ModelId,
   type ReasoningEffort,
 } from '../domain/options.js'
+import {
+  isPermissionPresetId,
+  permissionPresetId,
+  type PermissionPresetId,
+} from '../domain/permissions.js'
 
-export type PermissionMode = 'read-only' | 'workspace-write' | 'danger-full-access'
+export type PermissionMode = PermissionPresetId
 
 /** Immutable settings used by the bundled official Harness Web runtime. */
 export interface HarnessConfiguration {
@@ -90,9 +95,7 @@ export class ConfigurationService implements vscode.Disposable {
   }
 
   async setPermissionModeIfKnown(value: string): Promise<void> {
-    if (value === 'read-only' || value === 'workspace-write' || value === 'danger-full-access') {
-      await this.setPermissionMode(value)
-    }
+    if (isPermissionPresetId(value)) await this.setPermissionMode(value)
   }
 
   dispose(): void {
@@ -122,6 +125,5 @@ function nonEmpty(value: string | undefined, fallback: string): string {
 }
 
 function permissionMode(value: string | undefined): PermissionMode {
-  if (value === 'read-only' || value === 'danger-full-access') return value
-  return 'workspace-write'
+  return permissionPresetId(value)
 }

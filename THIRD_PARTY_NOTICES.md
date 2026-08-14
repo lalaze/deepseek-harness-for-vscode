@@ -22,6 +22,11 @@ This platform extension bundle contains:
   - License: Apache-2.0 OR MPL-2.0
   - Source: https://github.com/cure53/DOMPurify
 
+- DeepSeek logo mark
+  - Copyright and trademarks: Hangzhou DeepSeek Artificial Intelligence Basic Technology Research Co., Ltd.
+  - Source: https://www.deepseek.com/harness/favicon.svg
+  - Used to identify DeepSeek Harness. No endorsement of this community extension is implied.
+
 The DeepSeek Harness MIT license is reproduced below. Node.js and npm package
 license files are retained in the packaged dependency tree. The Webview bundle
 also embeds `markdown-it` and `DOMPurify`; their license files remain packaged.

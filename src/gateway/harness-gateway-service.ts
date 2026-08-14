@@ -18,6 +18,9 @@ import type {
 import type { PromptContentPart } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { AgentPresetEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { ConfigurationService } from '../config/configuration.js'
+import { projectionContextPressure } from '../domain/context-pressure.js'
+import { isPermissionPresetId, type PermissionPresetId } from '../domain/permissions.js'
+import { agentPresetTransition, type PromptConfiguration } from '../domain/prompt-configuration.js'
 import {
   projectConversation,
   projectionCommands,
@@ -143,6 +146,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     const plan = projectionPlan(this.projections.plan)
     const goal = projectionGoal(this.projections.goal)
     const tokenUsage = projectionTokenUsage(this.projections.tokenUsage)
+    const contextPressure = projectionContextPressure(this.projections.contextPressure)
     const active = activeSummary === undefined ? undefined : {
       id: String(activeSummary.sessionId),
       title: sessionListItem(activeSummary, this.labels).title,
@@ -175,6 +179,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       ...(plan === undefined ? {} : { plan }),
       ...(goal === undefined ? {} : { goal }),
       ...(tokenUsage === undefined ? {} : { tokenUsage }),
+      ...(contextPressure === undefined ? {} : { contextPressure }),
     }
     return {
       phase: this.phase,
@@ -186,17 +191,46 @@ export class HarnessGatewayService implements vscode.Disposable {
     }
   }
 
-  async createSession(): Promise<string> {
+  async createSession(agentPreset?: string): Promise<string> {
     const client = this.requireClient()
     const config = this.configuration.get()
+    const selectedPreset = agentPreset ?? config.agentPreset
     const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
-    const created = valueOf(await client.sessions.create({ cwd, agentPreset: config.agentPreset }))
+    const created = valueOf(await client.sessions.create({ cwd, agentPreset: selectedPreset }))
+    if (agentPreset !== undefined) await this.configuration.setAgentPresetIfKnown(agentPreset)
     await this.refreshSessionList()
     await this.selectSession(String(created.sessionId))
     await this.selectModel(config.provider, config.model, config.reasoningEffort, false)
     const permission = projectionPermissions(this.projections.permissions)?.currentValue
     if (permission !== config.permissionMode) await this.applyPermission(config.permissionMode, false)
     return String(created.sessionId)
+  }
+
+  /**
+   * Commits composer choices immediately before the next prompt. Harness locks
+   * an Agent Preset after a conversation starts, so changing DSH mode creates a
+   * fresh session while model/reasoning changes remain session-local.
+   */
+  async applyPromptConfiguration(selection: PromptConfiguration): Promise<void> {
+    if (this.subagentAddress !== undefined) {
+      throw new Error(vscode.l10n.t('Sub-agent configuration is fixed by its parent session.'))
+    }
+    let sessionId = this.activeSessionId
+    if (sessionId === undefined) {
+      sessionId = await this.createSession(selection.agentPreset)
+    } else {
+      const summary = this.summaries.get(sessionId)
+      const currentPreset = summary?.agentPreset ?? this.configuration.get().agentPreset
+      const transition = agentPresetTransition(summary?.blank === true, currentPreset, selection.agentPreset)
+      if (transition === 'select-blank-session') {
+        await this.selectPreset(selection.agentPreset)
+      } else if (transition === 'create-session') {
+        sessionId = await this.createSession(selection.agentPreset)
+      } else {
+        await this.configuration.setAgentPresetIfKnown(selection.agentPreset)
+      }
+    }
+    await this.selectModel(selection.provider, selection.model, selection.reasoningEffort)
   }
 
   async searchSessions(query: string): Promise<{ readonly sessionId: string; readonly snippet: string }[]> {
@@ -312,26 +346,19 @@ export class HarnessGatewayService implements vscode.Disposable {
   async prompt(
     text: string,
     mode: 'queue' | 'steer' = 'queue',
-    images: readonly PromptImage[] = [],
     selection?: PromptSelection,
   ): Promise<void> {
     const normalized = text.trim()
-    if (normalized === '' && images.length === 0 && selection === undefined) return
+    if (normalized === '' && selection === undefined) return
     if (this.activeSessionId === undefined) await this.createSession()
     const sessionId = this.requireActiveSession()
-    if (this.subagentAddress === undefined && images.length === 0 && this.isRegisteredHostCommand(normalized)) {
+    if (this.subagentAddress === undefined && this.isRegisteredHostCommand(normalized)) {
       await this.executeHostCommand(normalized)
       return
     }
     const content: PromptContentPart[] = [
       ...(selection === undefined ? [] : [selectionPart(selection)]),
       ...(normalized === '' ? [] : [{ type: 'text' as const, text: normalized }]),
-      ...images.map((image) => ({
-        type: 'image' as const,
-        mediaType: image.mediaType,
-        data: image.data,
-        ...(image.name === undefined ? {} : { name: image.name }),
-      })),
     ]
     if (this.subagentAddress === undefined) {
       valueOf(await this.requireClient().sessions.prompt({
@@ -342,7 +369,6 @@ export class HarnessGatewayService implements vscode.Disposable {
       }))
     } else {
       if (this.subagentAddress.mode === 'one-shot') throw new Error(vscode.l10n.t('One-shot sub-agent history is read-only.'))
-      if (images.length > 0) throw new Error(vscode.l10n.t('Images are not supported when continuing a sub-agent conversation.'))
       valueOf(await this.requireClient().subagents.prompt({
         ...this.subagentAddress,
         content: content.flatMap((part) => part.type === 'text' ? [{ type: 'text' as const, text: part.text }] : []),
@@ -429,6 +455,9 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   async selectPermission(value: string): Promise<void> {
     if (value === 'custom') return
+    if (!isPermissionPresetId(value)) {
+      throw new Error(vscode.l10n.t('Unknown sandbox permission preset: {0}', value))
+    }
     await this.applyPermission(value, true)
   }
 
@@ -686,12 +715,18 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the {0} catalog: {1}', name, errorMessage(cause)))
   }
 
-  private async applyPermission(value: string, persist: boolean): Promise<void> {
-    if (value !== 'read-only' && value !== 'workspace-write' && value !== 'danger-full-access') {
-      throw new Error(vscode.l10n.t('Unknown sandbox permission preset: {0}', value))
-    }
+  private async applyPermission(value: PermissionPresetId, persist: boolean): Promise<void> {
     await this.executeHostCommand(`/permission ${value}`)
+    this.commitPermissionProjection(value)
     if (persist) await this.configuration.setPermissionModeIfKnown(value)
+    this.fireChange()
+  }
+
+  /** Keeps the selector deterministic even before the projection push arrives. */
+  private commitPermissionProjection(value: PermissionPresetId): void {
+    const current = projectionPermissions(this.projections.permissions)
+    if (current === undefined || !current.options.some((option) => option.value === value)) return
+    this.projections.permissions = { ...current, currentValue: value }
   }
 
   private isRegisteredHostCommand(line: string): boolean {
@@ -778,12 +813,6 @@ export class HarnessGatewayService implements vscode.Disposable {
       this.changeEmitter.fire()
     }, 16)
   }
-}
-
-export interface PromptImage {
-  readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  readonly data: string
-  readonly name?: string
 }
 
 /** A snapshot of the active editor selection attached as prompt context. */

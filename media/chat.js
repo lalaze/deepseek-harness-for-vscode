@@ -1,5 +1,11 @@
 import { renderMarkdown } from '../src/webview/markdown.js'
 import { createWebviewTranslator } from '../src/webview/localization.js'
+import { composerConfigurationInput } from '../src/webview/composer-configuration/adapter.js'
+import { createComposerConfigurationComponent } from '../src/webview/composer-configuration/component.js'
+import { composerStatusText } from '../src/webview/composer-status.js'
+import { createContextMeterComponent } from '../src/webview/context-meter/component.js'
+import { permissionSelectOptions } from '../src/webview/permission/adapter.js'
+import { createWorkDurationComponent } from '../src/webview/work-duration/component.js'
 
 const vscode = acquireVsCodeApi()
 const t = createWebviewTranslator()
@@ -16,9 +22,6 @@ const elements = {
   sessionTitle: byId('session-title'),
   backParent: byId('back-parent'),
   fork: byId('fork'),
-  model: byId('model'),
-  reasoning: byId('reasoning'),
-  preset: byId('preset'),
   permission: byId('permission'),
   keyBanner: byId('key-banner'),
   setApiKey: byId('set-api-key'),
@@ -43,10 +46,7 @@ const elements = {
   interactions: byId('interactions'),
   prompt: byId('prompt'),
   commandMenu: byId('command-menu'),
-  attach: byId('attach'),
   attachSelection: byId('attach-selection'),
-  imageInput: byId('image-input'),
-  attachmentRail: byId('attachment-rail'),
   send: byId('send'),
   composerStatus: byId('composer-status'),
 }
@@ -55,7 +55,6 @@ let payload
 let currentDetail = 'todos'
 let renderedSessionId = ''
 const messageSignatures = new WeakMap()
-let attachments = []
 let searchResults = []
 let searchTimer
 let menuState = null
@@ -70,6 +69,14 @@ const markdownActions = {
   copyLabel: t('copy'),
   copyCodeLabel: (language) => t('copyCode', { language }),
 }
+const composerConfiguration = createComposerConfigurationComponent({
+  document,
+  translate: t,
+  onChange: () => renderComposer(payload?.state.active),
+  onOpen: closeCommandMenu,
+})
+const contextMeter = createContextMeterComponent({ document, translate: t })
+const workDuration = createWorkDurationComponent({ document, translate: t })
 
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'searchResults') {
@@ -102,10 +109,19 @@ elements.historySearch.addEventListener('input', () => {
     searchTimer = setTimeout(() => post('searchSessions', { query }), 180)
   }
 })
-elements.newSession.addEventListener('click', () => post('newSession'))
+elements.newSession.addEventListener('click', () => {
+  composerConfiguration.reset()
+  post('newSession')
+})
 elements.sessionTitle.addEventListener('click', () => post('rename'))
-elements.backParent.addEventListener('click', () => post('selectParent'))
-elements.fork.addEventListener('click', () => post('fork'))
+elements.backParent.addEventListener('click', () => {
+  composerConfiguration.reset()
+  post('selectParent')
+})
+elements.fork.addEventListener('click', () => {
+  composerConfiguration.reset()
+  post('fork')
+})
 elements.setApiKey.addEventListener('click', () => post('setApiKey'))
 elements.openSettings.addEventListener('click', () => post('openSettings'))
 elements.retry.addEventListener('click', () => post('retry'))
@@ -165,29 +181,7 @@ elements.prompt.addEventListener('keydown', (event) => {
 elements.prompt.addEventListener('blur', () => {
   setTimeout(() => { if (!elements.commandMenu.matches(':hover')) closeCommandMenu() }, 120)
 })
-elements.attach.addEventListener('click', () => elements.imageInput.click())
 elements.attachSelection.addEventListener('click', () => post('attachSelection'))
-elements.imageInput.addEventListener('change', async () => {
-  const files = [...elements.imageInput.files]
-  elements.imageInput.value = ''
-  const available = Math.max(0, 8 - attachments.length)
-  const accepted = files.slice(0, available).filter((file) => file.size <= 12_000_000)
-  const serialized = await Promise.all(accepted.map(readImage))
-  attachments = [...attachments, ...serialized]
-  renderAttachmentRail()
-  renderComposer(payload?.state.active)
-})
-elements.model.addEventListener('change', () => {
-  const option = elements.model.selectedOptions[0]
-  if (!option) return
-  post('setModel', {
-    provider: option.dataset.provider,
-    model: option.value,
-    reasoningEffort: elements.reasoning.value,
-  })
-})
-elements.reasoning.addEventListener('change', () => post('setReasoning', { value: elements.reasoning.value }))
-elements.preset.addEventListener('change', () => post('setPreset', { value: elements.preset.value }))
 elements.permission.addEventListener('change', () => post('setPermission', { value: elements.permission.value }))
 for (const tab of document.querySelectorAll('[data-detail]')) {
   tab.addEventListener('click', () => {
@@ -246,6 +240,7 @@ function renderSessions() {
     const snippet = snippets.get(session.id)
     if (snippet) button.append(node('span', 'session-snippet', snippet))
     button.addEventListener('click', () => {
+      composerConfiguration.reset()
       post('selectSession', { sessionId: session.id })
       toggleHistory(false)
     })
@@ -271,45 +266,10 @@ function renderSelectors(active) {
   })
   if (nextSignature === selectorSignature) return
   selectorSignature = nextSignature
-  const realModels = active?.models || []
-  const models = realModels.length > 0
-    ? realModels
-    : payload.fallbackOptions.models.map((item) => ({
-      provider: payload.configuration.provider,
-      id: item.id,
-      name: item.label,
-      description: item.description,
-      reasoning: [],
-    }))
-  const modelFragment = document.createDocumentFragment()
-  for (const model of models) {
-    const option = document.createElement('option')
-    option.value = model.id
-    option.dataset.provider = model.provider
-    option.textContent = model.name
-    option.title = model.description || ''
-    if (model.id === (active?.model?.model || payload.configuration.model)
-      && model.provider === (active?.model?.provider || payload.configuration.provider)) option.selected = true
-    modelFragment.append(option)
-  }
-  elements.model.replaceChildren(modelFragment)
-
-  const selectedModel = models.find((model) => model.id === elements.model.value && model.provider === elements.model.selectedOptions[0]?.dataset.provider)
-  const reasoning = selectedModel?.reasoning?.length > 0 ? selectedModel.reasoning : payload.fallbackOptions.reasoning
-  replaceOptions(elements.reasoning, reasoning, active?.model?.reasoningEffort || payload.configuration.reasoningEffort)
-
-  const presets = payload.state.presets.length > 0
-    ? payload.state.presets.filter((item) => !item.broken).map((item) => ({ id: item.id, label: item.name || item.id, description: item.description }))
-    : payload.fallbackOptions.presets
-  replaceOptions(elements.preset, presets, active?.agentPreset || payload.configuration.agentPreset)
-
-  const disabled = !active || !!active.parentSessionId || payload.state.phase !== 'connected'
-  elements.model.disabled = disabled
-  elements.reasoning.disabled = disabled
-  elements.preset.disabled = !!active?.parentSessionId || payload.state.phase !== 'connected'
+  composerConfiguration.update(composerConfigurationInput(payload))
   const permissions = active?.permissions
   if (permissions) {
-    replaceOptions(elements.permission, permissions.options, permissions.currentValue)
+    replaceOptions(elements.permission, permissionSelectOptions(permissions), permissions.currentValue)
     elements.permission.classList.remove('hidden')
     elements.permission.disabled = active.running || payload.state.phase !== 'connected'
   } else {
@@ -325,6 +285,7 @@ function replaceOptions(select, options, selected) {
     option.textContent = item.label || item.name || item.id
     option.title = item.description || ''
     option.selected = item.id === selected
+    option.disabled = item.disabled === true
     fragment.append(option)
   }
   select.replaceChildren(fragment)
@@ -392,6 +353,7 @@ function renderMessage(item) {
     const notice = node('div', `notice ${item.status || ''}`)
     notice.append(node('strong', '', item.title || t('status')))
     if (item.detail) notice.append(node('span', '', item.detail))
+    workDuration.update(notice, item.workDuration)
     return notice
   }
   const article = node('article', `message ${item.role || ''}`)
@@ -415,17 +377,21 @@ function renderMessage(item) {
   }
   if (item.status === 'running') body.append(node('span', 'typing-indicator', '● ● ●'))
   article.append(body)
+  workDuration.update(article, item.workDuration)
   return article
 }
 
 function renderTool(item) {
+  const container = node('div', 'tool-item')
   const details = node('details', `tool-card ${item.status || ''}`)
   details.dataset.disclosureKey = 'tool'
   const summary = node('summary')
   summary.append(node('span', 'tool-status'), node('span', 'tool-title', item.title || t('tool')))
   details.append(summary)
   if (item.detail) details.append(node('pre', 'tool-detail', item.detail))
-  return details
+  container.append(details)
+  workDuration.update(container, item.workDuration)
+  return container
 }
 
 function renderContext(item) {
@@ -585,7 +551,10 @@ function renderDetails() {
       const button = node('button', 'subagent-row')
       button.append(node('span', `job-status ${agent.activity}`), node('strong', '', agent.label || `Agent ${agent.id.slice(0, 8)}`))
       button.append(node('small', '', `${agent.mode === 'continuable' ? t('continuableConversation') : t('oneShot')}${agent.hasChildren ? t('hasChildAgents') : ''}`))
-      button.addEventListener('click', () => post('selectSubagent', { sessionId: agent.id, mode: agent.mode }))
+      button.addEventListener('click', () => {
+        composerConfiguration.reset()
+        post('selectSubagent', { sessionId: agent.id, mode: agent.mode })
+      })
       fragment.append(button)
     }
   } else if (currentDetail === 'jobs') {
@@ -617,27 +586,15 @@ function renderComposer(active) {
   const ready = payload.state.phase === 'connected' || payload.state.phase === 'reconnecting'
   elements.prompt.disabled = !ready
   if (active?.subagentMode === 'one-shot') elements.prompt.disabled = true
-  elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '' && attachments.length === 0)
+  elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '')
   elements.send.textContent = active?.running ? '■' : '↑'
   elements.send.title = active?.running ? t('stopGenerating') : t('sendTitle')
-  const usageText = tokenUsageText(active?.tokenUsage)
-  elements.composerStatus.textContent = (active?.subagentMode === 'one-shot'
-    ? t('oneShotReadOnly')
-    : active?.running ? t('runningQueue') : active?.model?.model || (active?.subagentMode === 'continuable' ? t('continuableSubagent') : '')) + usageText
-}
-
-function tokenUsageText(usage) {
-  if (!usage) return ''
-  const input = usage.uncachedInputTokens + usage.cacheReadTokens
-  const output = usage.outputTokens
-  if (input === 0 && output === 0) return ''
-  return ` · ↑${formatTokens(input)} / ↓${formatTokens(output)}`
-}
-
-function formatTokens(count) {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`
-  return String(count)
+  contextMeter.update(active?.contextPressure)
+  elements.composerStatus.textContent = composerStatusText(active, {
+    oneShotReadOnly: t('oneShotReadOnly'),
+    runningQueue: t('runningQueue'),
+    continuableSubagent: t('continuableSubagent'),
+  })
 }
 
 function updateCommandMenu() {
@@ -703,7 +660,9 @@ function renderCommandMenu() {
 function chooseCommand(command) {
   closeCommandMenu()
   if (command.kind === 'extension') {
-    post('runCommand', { name: command.name })
+    if (command.name === 'model') composerConfiguration.open('model')
+    else if (command.name === 'reasoning') composerConfiguration.open('reasoning')
+    else if (command.name === 'preset') composerConfiguration.open('preset')
     return
   }
   insertCommand(command.name)
@@ -724,48 +683,18 @@ function closeCommandMenu() {
 
 function sendPrompt() {
   closeCommandMenu()
+  composerConfiguration.close()
   const text = elements.prompt.value.trim()
-  if (!text && attachments.length === 0) return
-  post('sendPrompt', { text, mode: 'queue', images: attachments.map(({ mediaType, data, name }) => ({ mediaType, data, name })) })
+  if (!text) return
+  const configuration = composerConfiguration.selection()
+  composerConfiguration.markSubmitted()
+  post('sendPrompt', {
+    text,
+    mode: 'queue',
+    ...(configuration === undefined ? {} : { configuration }),
+  })
   elements.prompt.value = ''
-  attachments = []
-  renderAttachmentRail()
   resizePrompt()
-}
-
-function renderAttachmentRail() {
-  const fragment = document.createDocumentFragment()
-  attachments.forEach((attachment, index) => {
-    const item = node('div', 'attachment-item')
-    const image = document.createElement('img')
-    image.src = `data:${attachment.mediaType};base64,${attachment.data}`
-    image.alt = attachment.name || t('imageAttachment')
-    const remove = node('button', 'attachment-remove', '×')
-    remove.title = t('removeImage')
-    remove.addEventListener('click', () => {
-      attachments.splice(index, 1)
-      renderAttachmentRail()
-      renderComposer(payload?.state.active)
-    })
-    item.append(image, remove)
-    fragment.append(item)
-  })
-  elements.attachmentRail.replaceChildren(fragment)
-  elements.attachmentRail.classList.toggle('hidden', attachments.length === 0)
-}
-
-function readImage(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.addEventListener('load', () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      const comma = result.indexOf(',')
-      if (comma < 0) reject(new Error(t('imageReadFailed')))
-      else resolve({ mediaType: file.type, data: result.slice(comma + 1), name: file.name })
-    }, { once: true })
-    reader.addEventListener('error', () => reject(reader.error || new Error(t('imageReadFailed'))), { once: true })
-    reader.readAsDataURL(file)
-  })
 }
 
 function resizePrompt() {
@@ -828,6 +757,7 @@ function patchStreamingMessage(element, item) {
   const indicator = body.querySelector('.typing-indicator')
   if (item.status === 'running' && !indicator) body.append(node('span', 'typing-indicator', '● ● ●'))
   else if (item.status !== 'running') indicator?.remove()
+  workDuration.update(element, item.workDuration)
   return true
 }
 

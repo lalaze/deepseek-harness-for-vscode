@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag to publish a Release for (manual builds only; tag pushes publish automatically)'
+        description: 'Tag to create a GitHub Release for (manual builds only; tag pushes release automatically)'
         required: false
   push:
     tags:
@@ -29,12 +29,14 @@ jobs:
           - os: windows-2022
             target: win32-x64
           # darwin-x64 / win32-arm64: GitHub has no hosted Intel macOS or
-          # Windows ARM runners anymore. To publish them, add entries pointing
+          # Windows ARM runners anymore. To build them, add entries pointing
           # at self-hosted runners with those architectures.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
+          # Manual releases must build the requested tag, not the current branch.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref }}
           # Build dependencies do not need access to the repository token.
           persist-credentials: false
 
@@ -59,7 +61,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    # Tag pushes publish automatically; manual dispatch publishes only when a
+    # Tag pushes create a GitHub Release automatically; manual dispatch does so only when a
     # tag name is supplied, so `github.ref` (a branch) never creates a release.
     if: >-
       github.event_name == 'push' ||

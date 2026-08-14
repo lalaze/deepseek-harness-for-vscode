@@ -16,6 +16,16 @@ describe('Harness Web profile overlay', () => {
     expect(overlay).toContain('model: deepseek-v4-pro')
     expect(overlay).toContain('default: code')
     expect(overlay).toContain('defaultPreset: workspace-write')
+    expect(overlay).toContain(`presets:
+      read-only:
+        sandbox: read-only
+        approval: ask`)
+    expect(overlay).toContain(`workspace-write:
+        sandbox: workspace-write
+        approval: ask`)
+    expect(overlay).toContain(`danger-full-access:
+        sandbox: danger-full-access
+        approval: never`)
   })
 
   it('disables thinking and safely quotes custom provider ids', () => {

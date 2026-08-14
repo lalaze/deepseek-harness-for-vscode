@@ -4,6 +4,7 @@ import {
   EXTENSION_COMMANDS,
   projectConversation,
   projectionCommands,
+  projectionPermissions,
   projectionTokenUsage,
 } from '../src/domain/workbench-state.js'
 
@@ -68,6 +69,28 @@ describe('projectConversation', () => {
       detail: 'preset read-only',
     })])
   })
+
+  it('shows one turn duration on the final visible result', () => {
+    const entries = [
+      timedEntry(0, 1_000, 'turn/start', { turn: 1 }),
+      timedEntry(1, 1_200, 'assistant/message', {
+        turn: 1, step: 1,
+        message: {
+          id: 'a1', role: 'assistant', source: { kind: 'model', provider: 'p', model: 'm' },
+          content: [{ type: 'text', text: '先检查。' }],
+        },
+      }, 'append'),
+      timedEntry(2, 2_000, 'tool/result', {
+        turn: 1, step: 1, error: undefined,
+        message: { id: 'r1', role: 'tool', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'text', text: 'ok' }] },
+      }),
+      timedEntry(3, 4_600, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ] as HistoryEntry[]
+
+    const messages = projectConversation(entries).messages
+    expect(messages[0]?.workDuration).toBeUndefined()
+    expect(messages[1]?.workDuration).toEqual({ startedAt: 1_000, endedAt: 4_600 })
+  })
 })
 
 describe('projectionCommands', () => {
@@ -99,6 +122,31 @@ describe('projectionCommands', () => {
   it('returns the extension commands only when the host list is empty or absent', () => {
     expect(projectionCommands([])).toEqual(EXTENSION_COMMANDS)
     expect(projectionCommands(undefined)).toEqual(EXTENSION_COMMANDS)
+  })
+})
+
+describe('projectionPermissions', () => {
+  it('preserves the Harness value/name transport shape for the Webview adapter', () => {
+    expect(projectionPermissions({
+      currentValue: 'workspace-write',
+      options: [
+        { value: 'read-only', name: 'read-only' },
+        { value: 'workspace-write', name: 'Workspace', description: 'Workspace writes.' },
+        { value: 42, name: 'broken' },
+      ],
+    })).toEqual({
+      currentValue: 'workspace-write',
+      options: [
+        { value: 'read-only', name: 'read-only' },
+        { value: 'workspace-write', name: 'Workspace', description: 'Workspace writes.' },
+      ],
+    })
+  })
+
+  it('rejects malformed projection roots', () => {
+    expect(projectionPermissions(undefined)).toBeUndefined()
+    expect(projectionPermissions({ currentValue: 1, options: [] })).toBeUndefined()
+    expect(projectionPermissions({ currentValue: 'read-only', options: {} })).toBeUndefined()
   })
 })
 
@@ -142,4 +190,8 @@ describe('projectionTokenUsage', () => {
 
 function entry(seq: number, type: string, data: unknown, surfaceOp?: 'append'): unknown {
   return { event: { seq, time: seq + 1, type, data, ...(surfaceOp === undefined ? {} : { surfaceOp }) } }
+}
+
+function timedEntry(seq: number, time: number, type: string, data: unknown, surfaceOp?: 'append'): unknown {
+  return { event: { seq, time, type, data, ...(surfaceOp === undefined ? {} : { surfaceOp }) } }
 }

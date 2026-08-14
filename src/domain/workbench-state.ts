@@ -7,6 +7,8 @@ import type {
 } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { HistoryEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type {} from '@deepseek-ai/dsh-commands/types'
+import type { ContextPressureView } from './context-pressure.js'
+import { projectTurnDurations, type TurnDurationView } from './turn-duration.js'
 
 export type ConnectionPhase = 'idle' | 'starting' | 'connected' | 'reconnecting' | 'error'
 
@@ -35,6 +37,8 @@ export interface ChatItem {
   readonly status?: 'running' | 'success' | 'error' | 'info'
   readonly blocks?: readonly ChatBlock[]
   readonly detail?: string
+  /** Timing of the Harness turn, shown only on that turn's last visible item. */
+  readonly workDuration?: TurnDurationView
 }
 
 export interface PendingApprovalView {
@@ -92,6 +96,7 @@ export interface ActiveSessionView {
   readonly plan?: { readonly active: boolean; readonly pending: boolean }
   readonly goal?: GoalView
   readonly tokenUsage?: TokenUsageView
+  readonly contextPressure?: ContextPressureView
 }
 
 export type SubagentView = {
@@ -295,6 +300,11 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   readonly todos: { readonly content: string; readonly status: string }[]
 } {
   const messages: ChatItem[] = []
+  const messageTurns = new Map<string, number>()
+  const addMessage = (message: ChatItem, turn?: number): void => {
+    messages.push(message)
+    if (turn !== undefined) messageTurns.set(message.id, turn)
+  }
   const finalSteps = new Set<string>()
   const partials = new Map<string, PartialBlocks>()
   const commandRuns = new Map<string, {
@@ -337,7 +347,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         if (isReplacement(event.surfaceOp)) break
         const source = event.data.source
         const human = source.kind === 'user'
-        messages.push({
+        addMessage({
           id: `event-${event.seq}`,
           seq: event.seq,
           time: event.time,
@@ -360,19 +370,19 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         if (isReplacement(event.surfaceOp)) break
         const blocks = projectBlocks(event.data.message.content, labels)
         if (blocks.length > 0) {
-          messages.push({
+          addMessage({
             id: `event-${event.seq}`,
             seq: event.seq,
             time: event.time,
             kind: 'message',
             role: 'assistant',
             blocks,
-          })
+          }, event.data.turn)
         }
         break
       }
       case 'tool/call': {
-        messages.push({
+        addMessage({
           id: `tool-${String(event.data.callId)}-call`,
           seq: event.seq,
           time: event.time,
@@ -380,11 +390,11 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
           title: event.data.name,
           status: 'running',
           detail: prettyJson(event.data.arguments),
-        })
+        }, event.data.turn)
         break
       }
       case 'tool/result': {
-        messages.push({
+        addMessage({
           id: `tool-${String(event.data.message.source.callId)}-result`,
           seq: event.seq,
           time: event.time,
@@ -392,13 +402,13 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
           title: labels.toolResult,
           status: event.data.error === undefined ? 'success' : 'error',
           detail: blockText(event.data.message.content, labels),
-        })
+        }, event.data.turn)
         break
       }
       case 'command/run': {
         const commandId = String(event.data.commandId)
         const done = commandDones.get(commandId)
-        messages.push(commandItem(commandId, {
+        addMessage(commandItem(commandId, {
           seq: event.seq,
           time: event.time,
           name: event.data.name,
@@ -409,7 +419,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
       case 'command/done': {
         const commandId = String(event.data.commandId)
         if (commandRuns.has(commandId)) break
-        messages.push(commandItem(commandId, undefined, {
+        addMessage(commandItem(commandId, undefined, {
           seq: event.seq,
           time: event.time,
           kind: event.data.kind,
@@ -422,7 +432,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         break
       case 'turn/end':
         if (event.data.reason.kind !== 'completed') {
-          messages.push({
+          addMessage({
             id: `turn-${event.data.turn}-end`,
             seq: event.seq,
             time: event.time,
@@ -430,7 +440,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
             title: turnEndTitle(event.data.reason.kind, labels),
             status: event.data.reason.kind === 'error' ? 'error' : 'info',
             ...('error' in event.data.reason ? { detail: event.data.reason.error.message } : {}),
-          })
+          }, event.data.turn)
         }
         break
       default:
@@ -439,7 +449,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   }
 
   for (const [key, partial] of partials) {
-    messages.push({
+    addMessage({
       id: `partial-${key}`,
       seq: partial.seq,
       time: partial.time,
@@ -447,10 +457,29 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
       role: 'assistant',
       status: 'running',
       blocks: partial.blocks(),
-    })
+    }, turnFromStepKey(key))
   }
   messages.sort((left, right) => left.seq - right.seq)
+  attachTurnDurations(messages, messageTurns, projectTurnDurations(entries))
   return { messages, todos }
+}
+
+/** Attaches one footer per turn to the chronologically last visible result. */
+function attachTurnDurations(
+  messages: ChatItem[],
+  messageTurns: ReadonlyMap<string, number>,
+  durations: ReadonlyMap<number, TurnDurationView>,
+): void {
+  const lastMessageIndex = new Map<number, number>()
+  messages.forEach((message, index) => {
+    const turn = messageTurns.get(message.id)
+    if (turn !== undefined) lastMessageIndex.set(turn, index)
+  })
+  for (const [turn, duration] of durations) {
+    const index = lastMessageIndex.get(turn)
+    const message = index === undefined ? undefined : messages[index]
+    if (index !== undefined && message !== undefined) messages[index] = { ...message, workDuration: duration }
+  }
 }
 
 function commandItem(
@@ -552,6 +581,10 @@ function contextTitle(source: { readonly kind: string }, labels: WorkbenchLabels
 
 function stepKey(turn: number, step: number): string {
   return `${turn}:${step}`
+}
+
+function turnFromStepKey(key: string): number {
+  return Number(key.slice(0, key.indexOf(':')))
 }
 
 function prettyJson(value: string): string {
