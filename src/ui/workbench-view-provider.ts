@@ -126,14 +126,16 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'loadOlder':
         await this.gateway.loadOlder()
         break
-      case 'sendPrompt':
+      case 'sendPrompt': {
+        const text = typeof value.text === 'string' ? value.text : ''
         await this.gateway.prompt(
-          typeof value.text === 'string' ? value.text : '',
+          text,
           value.mode === 'steer' ? 'steer' : 'queue',
           promptImages(value.images),
-          autoSelection(typeof value.text === 'string' ? value.text : ''),
+          this.configuration.get().autoAttachSelection ? autoSelection(text) : undefined,
         )
         break
+      }
       case 'cancel':
         await this.gateway.cancel()
         break

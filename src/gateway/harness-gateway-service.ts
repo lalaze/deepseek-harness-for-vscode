@@ -434,9 +434,13 @@ export class HarnessGatewayService implements vscode.Disposable {
   async refreshCommands(): Promise<void> {
     const sessionId = this.activeSessionId
     if (sessionId === undefined) return
+    const generation = this.selectionGeneration
     try {
-      this.commands = await this.commandsFor(sessionId)
+      const commands = await this.commandsFor(sessionId)
+      if (!this.isCurrentSelection(sessionId, generation)) return
+      this.commands = commands
     } catch (cause) {
+      if (!this.isCurrentSelection(sessionId, generation)) return
       this.commands = projectionCommands(undefined)
       this.output.appendLine(`[gateway] 命令列表刷新失败：${errorMessage(cause)}`)
     }

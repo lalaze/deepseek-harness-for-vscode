@@ -169,10 +169,12 @@ export class HarnessHostRuntime implements vscode.Disposable {
       // On Windows SIGTERM is an immediate TerminateProcess of the direct child
       // only; dsh's tool subprocesses (shells, background jobs) can outlive it.
       // Kill the whole process tree via taskkill so nothing survives a reload.
-      try {
-        spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
-      } catch {
-        // taskkill is best-effort; the direct kill fallback below still applies.
+      const killed = spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
+      // spawnSync neither throws on a failing taskkill (status != 0) nor on a
+      // missing executable (error set); either way descendants may survive.
+      if (killed.error !== undefined || killed.status !== 0) {
+        this.output.appendLine('[host] taskkill 进程树终止失败，回退为直接终止（子进程可能残留）。')
+        child.kill()
       }
     } else {
       // POSIX: graceful SIGTERM first, escalate to SIGKILL on timeout.

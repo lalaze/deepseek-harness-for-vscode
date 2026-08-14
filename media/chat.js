@@ -932,9 +932,13 @@ function renderMarkdown(text) {
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(raw)
     if (item) {
       flushParagraph()
+      const ordered = /^\s*\d+/.test(raw)
+      // A marker-type change (-/1.) splits the list instead of merging items
+      // with different semantics into one <ul>/<ol>.
+      if (list !== null && ordered !== listOrdered) flushList()
       if (list === null) {
         list = []
-        listOrdered = /^\s*\d+/.test(raw)
+        listOrdered = ordered
       }
       const li = node('li', 'md-list-item')
       li.append(renderInline(item[1]))
@@ -1032,7 +1036,9 @@ function insertSelection(selection) {
   resizePrompt()
   renderComposer(payload?.state.active)
   prompt.focus()
-  prompt.setSelectionRange(prompt.value.length, prompt.value.length)
+  // Keep the caret at the end of the inserted snippet; text that followed the
+  // insertion point stays after it and further input lands in the right spot.
+  prompt.setSelectionRange(start + snippet.length, start + snippet.length)
 }
 
 vscode.postMessage({ type: 'ready' })
