@@ -34,6 +34,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Build dependencies do not need access to the repository token.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -42,10 +45,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      # npm >= 11 gates install scripts behind an allow-list; the repo's
-      # package.json carries the approved list (allowScripts), so npm ci runs
-      # the native-module scripts (node, node-pty, koffi, …) on every platform.
 
       - name: Package VSIX
         run: npm run package

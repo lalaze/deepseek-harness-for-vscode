@@ -1,10 +1,10 @@
 {
-  "name": "deepseek-harness-vscode",
-  "displayName": "DeepSeek Harness",
-  "description": "原生 DeepSeek Harness VS Code Agent，无 WebUI 嵌套且无需本地部署",
-  "version": "0.4.1",
+  "name": "deepseek-harness-for-vscode",
+  "displayName": "DeepSeek Harness for Visual Studio Code",
+  "description": "%extension.description%",
+  "version": "0.4.2",
   "type": "module",
-  "publisher": "deepseek-harness-community",
+  "publisher": "skymecode",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -27,6 +27,7 @@
     "workspace"
   ],
   "main": "./dist/extension.cjs",
+  "l10n": "./l10n",
   "scripts": {
     "check-types": "tsc --noEmit",
     "compile": "npm run check-types && node esbuild.mjs",
@@ -41,32 +42,32 @@
     "commands": [
       {
         "command": "deepseekHarness.openChat",
-        "title": "DeepSeek Harness: 打开工作台",
+        "title": "%command.openChat%",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "deepseekHarness.reloadRuntime",
-        "title": "DeepSeek Harness: 重新加载工作台",
+        "title": "%command.reloadRuntime%",
         "icon": "$(refresh)"
       },
       {
         "command": "deepseekHarness.setApiKey",
-        "title": "DeepSeek Harness: 设置 API Key"
+        "title": "%command.setApiKey%"
       },
       {
         "command": "deepseekHarness.clearApiKey",
-        "title": "DeepSeek Harness: 清除 API Key"
+        "title": "%command.clearApiKey%"
       },
       {
         "command": "deepseekHarness.showLogs",
-        "title": "DeepSeek Harness: 显示日志"
+        "title": "%command.showLogs%"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "deepseekHarness",
-          "title": "DeepSeek Harness",
+          "title": "DeepSeek Harness for Visual Studio Code",
           "icon": "media/deepseek-harness.svg"
         }
       ]
@@ -75,7 +76,7 @@
       "deepseekHarness": [
         {
           "id": "deepseekHarness.chatView",
-          "name": "对话",
+          "name": "%view.chat%",
           "type": "webview"
         }
       ]
@@ -103,13 +104,13 @@
       }
     ],
     "configuration": {
-      "title": "DeepSeek Harness",
+      "title": "DeepSeek Harness for Visual Studio Code",
       "properties": {
         "deepseekHarness.apiKey": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "DeepSeek API Key。按需求保存在本机 VS Code 用户 `settings.json` 中，不写入工作区配置；该字段是明文，请勿提交或分享 settings 文件。"
+          "markdownDescription": "%config.apiKey%"
         },
         "deepseekHarness.model": {
           "type": "string",
@@ -118,11 +119,11 @@
             "deepseek-v4-pro"
           ],
           "enumDescriptions": [
-            "DeepSeek V4 Flash，响应更快。",
-            "DeepSeek V4 Pro，适合复杂编码与长链路推理。"
+            "%config.model.flash%",
+            "%config.model.pro%"
           ],
           "default": "deepseek-v4-flash",
-          "description": "Harness 新会话默认使用的模型。"
+          "description": "%config.model%"
         },
         "deepseekHarness.reasoningEffort": {
           "type": "string",
@@ -132,12 +133,12 @@
             "max"
           ],
           "enumDescriptions": [
-            "关闭显式推理。",
-            "高推理强度（Harness 默认值）。",
-            "最高推理强度。"
+            "%config.reasoning.off%",
+            "%config.reasoning.high%",
+            "%config.reasoning.max%"
           ],
           "default": "high",
-          "description": "DeepSeek Harness 推理等级。"
+          "description": "%config.reasoning%"
         },
         "deepseekHarness.agentPreset": {
           "type": "string",
@@ -148,23 +149,23 @@
             "cordis"
           ],
           "enumDescriptions": [
-            "标准模式：完整编码 Agent。",
-            "PTC 模式：通过 Code Mode SDK 组合多步工具操作。",
-            "极简模式：精简的编码工具集。",
-            "创造模式：检查运行时并创作自定义 Agent Preset。"
+            "%config.preset.standard%",
+            "%config.preset.code%",
+            "%config.preset.minimal%",
+            "%config.preset.cordis%"
           ],
           "default": "standard",
-          "description": "Harness 新会话默认使用的官方 Agent Preset。"
+          "description": "%config.preset%"
         },
         "deepseekHarness.provider": {
           "type": "string",
           "default": "deepseek-official",
-          "description": "Harness 运行时中注册的提供方路由。"
+          "description": "%config.provider%"
         },
         "deepseekHarness.baseUrl": {
           "type": "string",
           "default": "",
-          "description": "可选的 DeepSeek API Base URL；留空时由 Harness 使用默认地址。"
+          "description": "%config.baseUrl%"
         },
         "deepseekHarness.permissionMode": {
           "type": "string",
@@ -174,17 +175,17 @@
             "danger-full-access"
           ],
           "enumDescriptions": [
-            "禁止 Harness 工具写入文件。",
-            "仅允许写入当前工作区及运行时临时目录。",
-            "不施加 Harness 文件沙箱限制。"
+            "%config.permission.readOnly%",
+            "%config.permission.workspaceWrite%",
+            "%config.permission.dangerFullAccess%"
           ],
           "default": "workspace-write",
-          "description": "Harness 工具的文件访问与审批默认策略。"
+          "description": "%config.permission%"
         },
         "deepseekHarness.autoAttachSelection": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "发送消息时自动把当前编辑器选中的代码附加为上下文（等同自动点击“⬒ 选区”）。设为 `false` 后仅通过“⬒ 选区”按钮手动附加。"
+          "markdownDescription": "%config.autoAttachSelection%"
         }
       }
     }
@@ -203,18 +204,9 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh": "0.1.0-rc.6",
+    "dompurify": "3.4.13",
+    "markdown-it": "15.0.0",
     "node": "22.22.3",
     "ws": "^8.21.3"
-  },
-  "allowScripts": {
-    "node@22.22.3": true,
-    "@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6": true,
-    "esbuild@0.25.12": true,
-    "node-pty@1.1.0": true,
-    "koffi@3.1.4": true,
-    "keytar@7.9.0": true,
-    "protobufjs@7.6.5": true,
-    "@vscode/vsce-sign@2.0.9": true,
-    "@google/genai@1.52.0": true
   }
 }

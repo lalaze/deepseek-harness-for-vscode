@@ -22,7 +22,10 @@ export interface BundledRuntimeLaunch {
  * modules whose ABI/signing contract is that of ordinary Node, not Electron.
  */
 export class BundledRuntimeResolver {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly localize: RuntimeLocalize = defaultLocalize,
+  ) {}
 
   async resolve(): Promise<BundledRuntimeLaunch> {
     const entry = this.context.asAbsolutePath('node_modules/@deepseek-ai/dsh/lib/bin.js')
@@ -38,7 +41,7 @@ export class BundledRuntimeResolver {
         access(node, process.platform === 'win32' ? fsConstants.R_OK : fsConstants.R_OK | fsConstants.X_OK),
       ])
     } catch {
-      throw new Error('扩展内置的 DeepSeek Harness 运行时不完整，请重新安装 VSIX。')
+      throw new Error(this.localize('The bundled DeepSeek Harness runtime is incomplete. Reinstall the VSIX.'))
     }
 
     let versionText = ''
@@ -46,11 +49,11 @@ export class BundledRuntimeResolver {
       const result = await execFileAsync(node, ['--version'], { encoding: 'utf8' })
       versionText = result.stdout.trim()
     } catch {
-      throw new Error('扩展内置 Node 无法在当前平台执行，请安装匹配系统与架构的 VSIX。')
+      throw new Error(this.localize('The bundled Node executable cannot run on this platform. Install the VSIX matching your operating system and architecture.'))
     }
     const version = parseNodeVersion(versionText)
     if (version === undefined || !supportsHarnessNode(version)) {
-      throw new Error(`扩展内置 Node 版本不受 Harness 支持：${versionText || '未知'}。`)
+      throw new Error(this.localize('The bundled Node version is not supported by Harness: {0}.', versionText || this.localize('unknown')))
     }
 
     return {
@@ -59,6 +62,12 @@ export class BundledRuntimeResolver {
       environment: { ...process.env },
     }
   }
+}
+
+export type RuntimeLocalize = (message: string, ...args: Array<string | number | boolean>) => string
+
+function defaultLocalize(message: string, ...args: Array<string | number | boolean>): string {
+  return message.replace(/\{(\d+)\}/gu, (placeholder, index: string) => args[Number(index)]?.toString() ?? placeholder)
 }
 
 export function parseNodeVersion(value: string): { major: number; minor: number; patch: number } | undefined {

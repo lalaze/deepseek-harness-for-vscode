@@ -1,4 +1,8 @@
+import { renderMarkdown } from '../src/webview/markdown.js'
+import { createWebviewTranslator } from '../src/webview/localization.js'
+
 const vscode = acquireVsCodeApi()
+const t = createWebviewTranslator()
 
 const byId = (id) => document.getElementById(id)
 const elements = {
@@ -59,6 +63,13 @@ let menuLoadedSession = null
 let selectorSignature = ''
 let interactionSignature = ''
 let detailSignature = ''
+const markdownActions = {
+  openExternal: (url) => post('openExternal', { url }),
+  copyCode: (code) => copyText(code),
+  defaultCodeLanguage: t('code'),
+  copyLabel: t('copy'),
+  copyCodeLabel: (language) => t('copyCode', { language }),
+}
 
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'searchResults') {
@@ -193,7 +204,7 @@ function render() {
   if (!elements.historyPanel.classList.contains('hidden')) renderSessions()
   renderSelectors(active)
   elements.keyBanner.classList.toggle('hidden', state.hasApiKey)
-  elements.sessionTitle.textContent = active?.title || '新对话'
+  elements.sessionTitle.textContent = active?.title || t('newConversation')
   elements.sessionTitle.disabled = !active || !!active.parentSessionId
   elements.backParent.classList.toggle('hidden', !active?.parentSessionId)
   elements.fork.disabled = !active || active.blank
@@ -208,13 +219,13 @@ function render() {
 function renderPhase(state) {
   const phase = state.phase
   elements.connection.className = `connection ${phase}`
-  elements.connection.textContent = phase === 'connected' ? '已连接' : phase === 'reconnecting' ? '重连中' : phase === 'error' ? '异常' : '启动中'
+  elements.connection.textContent = phase === 'connected' ? t('connected') : phase === 'reconnecting' ? t('reconnecting') : phase === 'error' ? t('connectionError') : t('starting')
   const failed = phase === 'error'
   const loading = phase === 'idle' || phase === 'starting'
   elements.loading.classList.toggle('hidden', !loading)
   elements.error.classList.toggle('hidden', !failed)
   elements.chat.classList.toggle('hidden', loading || failed)
-  if (failed) elements.errorMessage.textContent = state.error || '未知错误'
+  if (failed) elements.errorMessage.textContent = state.error || t('unknownError')
 }
 
 function renderSessions() {
@@ -240,7 +251,7 @@ function renderSessions() {
     })
     fragment.append(button)
   }
-  if (sessions.length === 0) fragment.append(node('p', 'muted-empty', '没有匹配的会话'))
+  if (sessions.length === 0) fragment.append(node('p', 'muted-empty', t('noMatchingConversations')))
   elements.sessionList.replaceChildren(fragment)
 }
 
@@ -379,27 +390,27 @@ function renderMessage(item) {
   if (item.kind === 'context') return renderContext(item)
   if (item.kind === 'notice') {
     const notice = node('div', `notice ${item.status || ''}`)
-    notice.append(node('strong', '', item.title || '状态'))
+    notice.append(node('strong', '', item.title || t('status')))
     if (item.detail) notice.append(node('span', '', item.detail))
     return notice
   }
   const article = node('article', `message ${item.role || ''}`)
-  const label = node('div', 'message-label', item.role === 'user' ? '你' : 'DeepSeek')
+  const label = node('div', 'message-label', item.role === 'user' ? t('you') : 'DeepSeek')
   article.append(label)
   const body = node('div', 'message-body')
   for (const [index, block] of (item.blocks || []).entries()) {
     if (block.kind === 'reasoning') {
       const details = node('details', 'reasoning-block')
       details.dataset.disclosureKey = `reasoning-${index}`
-      details.append(node('summary', '', '推理过程'), node('pre', '', block.text))
+      const content = node('div', 'reasoning-content markdown-body')
+      renderMarkdown(content, block.text, markdownActions)
+      details.append(node('summary', '', t('reasoningProcess')), content)
       body.append(details)
-    } else if (block.kind === 'text' && (item.role === 'user' || item.role === 'assistant')) {
-      const content = node('div', 'content-block md')
-      content.dataset.mdText = block.text
-      content.append(renderMarkdown(block.text))
-      body.append(content)
     } else {
-      body.append(node('div', `content-block ${block.kind}`, block.text))
+      const content = node('div', `content-block ${block.kind}${block.kind === 'text' ? ' markdown-body' : ''}`)
+      if (block.kind === 'text') renderMarkdown(content, block.text, markdownActions)
+      else content.textContent = block.text
+      body.append(content)
     }
   }
   if (item.status === 'running') body.append(node('span', 'typing-indicator', '● ● ●'))
@@ -411,7 +422,7 @@ function renderTool(item) {
   const details = node('details', `tool-card ${item.status || ''}`)
   details.dataset.disclosureKey = 'tool'
   const summary = node('summary')
-  summary.append(node('span', 'tool-status'), node('span', 'tool-title', item.title || '工具'))
+  summary.append(node('span', 'tool-status'), node('span', 'tool-title', item.title || t('tool')))
   details.append(summary)
   if (item.detail) details.append(node('pre', 'tool-detail', item.detail))
   return details
@@ -420,7 +431,7 @@ function renderTool(item) {
 function renderContext(item) {
   const details = node('details', 'context-card')
   details.dataset.disclosureKey = 'context'
-  details.append(node('summary', '', item.title || '上下文'))
+  details.append(node('summary', '', item.title || t('context')))
   const text = (item.blocks || []).map((block) => block.text).join('\n')
   details.append(node('pre', '', text))
   return details
@@ -437,12 +448,12 @@ function renderInteractions(active) {
   const fragment = document.createDocumentFragment()
   for (const approval of active?.approvals || []) {
     const card = node('section', 'interaction-card warning')
-    card.append(node('strong', '', `需要批准：${approval.toolName}`))
+    card.append(node('strong', '', t('approvalRequired', { tool: approval.toolName })))
     if (approval.reason) card.append(node('p', '', approval.reason))
     const actions = node('div', 'interaction-actions')
-    const reject = node('button', 'secondary-button', '拒绝')
+    const reject = node('button', 'secondary-button', t('reject'))
     reject.addEventListener('click', () => post('answerApproval', { key: approval.key, outcome: 'rejected' }))
-    const allow = node('button', 'primary-button', '允许一次')
+    const allow = node('button', 'primary-button', t('allowOnce'))
     allow.addEventListener('click', () => post('answerApproval', { key: approval.key, outcome: 'allowed-once' }))
     actions.append(reject, allow)
     card.append(actions)
@@ -454,7 +465,7 @@ function renderInteractions(active) {
 
 function renderQuestions(pending) {
   const form = node('form', 'interaction-card question-card')
-  form.append(node('strong', '', 'Harness 需要你的选择'))
+  form.append(node('strong', '', t('questionRequired')))
   for (const question of pending.questions) {
     const fieldset = document.createElement('fieldset')
     const legend = node('legend', '', question.header || question.question)
@@ -474,11 +485,11 @@ function renderQuestions(pending) {
     const custom = document.createElement('input')
     custom.className = 'custom-answer'
     custom.name = `custom-${question.id}`
-    custom.placeholder = '其他回答（可选）'
+    custom.placeholder = t('otherAnswer')
     fieldset.append(custom)
     form.append(fieldset)
   }
-  const submit = node('button', 'primary-button', '提交回答')
+  const submit = node('button', 'primary-button', t('submitAnswer'))
   submit.type = 'submit'
   form.append(submit)
   form.addEventListener('submit', (event) => {
@@ -518,9 +529,9 @@ function renderDetails() {
   if (currentDetail === 'todos') {
     if (active?.plan) {
       const mode = node('div', 'plan-mode-row')
-      const text = active.plan.pending ? 'Plan 模式切换中' : active.plan.active ? 'Plan 模式已开启' : 'Plan 模式已关闭'
+      const text = active.plan.pending ? t('planChanging') : active.plan.active ? t('planEnabled') : t('planDisabled')
       mode.append(node('span', '', text))
-      const toggle = node('button', 'secondary-button', active.plan.active ? '关闭' : '开启')
+      const toggle = node('button', 'secondary-button', active.plan.active ? t('disable') : t('enable'))
       toggle.disabled = active.plan.pending || active.running
       toggle.addEventListener('click', () => post('setPlan', { active: !active.plan.active }))
       mode.append(toggle)
@@ -534,19 +545,23 @@ function renderDetails() {
   } else if (currentDetail === 'goal') {
     const goal = active?.goal
     if (!goal) {
-      const create = node('button', 'primary-button', '创建持续目标')
+      const create = node('button', 'primary-button', t('createGoal'))
       create.addEventListener('click', () => post('createGoal'))
       fragment.append(create)
     } else {
       const card = node('section', 'goal-card')
       card.append(node('strong', '', goal.objective))
-      card.append(node('span', 'goal-meta', `${goal.phase} · ${goal.roundsStarted}/${goal.maxGoalRounds} 轮`))
+      card.append(node('span', 'goal-meta', t('goalRounds', {
+        phase: goalPhaseLabel(goal.phase),
+        current: goal.roundsStarted,
+        max: goal.maxGoalRounds,
+      })))
       if (goal.blockedReason) card.append(node('p', '', goal.blockedReason))
       const actions = node('div', 'goal-actions')
-      if (goal.phase === 'active') actions.append(goalButton('暂停', 'pause'))
-      if (goal.phase === 'paused' || goal.phase === 'blocked') actions.append(goalButton('继续', 'resume'))
-      if (goal.phase !== 'complete') actions.append(goalButton('标记完成', 'complete'))
-      actions.append(goalButton('清除', 'clear', true))
+      if (goal.phase === 'active') actions.append(goalButton(t('pause'), 'pause'))
+      if (goal.phase === 'paused' || goal.phase === 'blocked') actions.append(goalButton(t('resume'), 'resume'))
+      if (goal.phase !== 'complete') actions.append(goalButton(t('markComplete'), 'complete'))
+      actions.append(goalButton(t('clear'), 'clear', true))
       card.append(actions)
       fragment.append(card)
     }
@@ -569,7 +584,7 @@ function renderDetails() {
       }
       const button = node('button', 'subagent-row')
       button.append(node('span', `job-status ${agent.activity}`), node('strong', '', agent.label || `Agent ${agent.id.slice(0, 8)}`))
-      button.append(node('small', '', `${agent.mode === 'continuable' ? '可继续对话' : '一次性'}${agent.hasChildren ? ' · 有子 Agent' : ''}`))
+      button.append(node('small', '', `${agent.mode === 'continuable' ? t('continuableConversation') : t('oneShot')}${agent.hasChildren ? t('hasChildAgents') : ''}`))
       button.addEventListener('click', () => post('selectSubagent', { sessionId: agent.id, mode: agent.mode }))
       fragment.append(button)
     }
@@ -581,7 +596,7 @@ function renderDetails() {
       fragment.append(row)
     }
   }
-  if (!fragment.childNodes.length) fragment.append(node('p', 'muted-empty', '暂无内容'))
+  if (!fragment.childNodes.length) fragment.append(node('p', 'muted-empty', t('noContent')))
   elements.detailContent.replaceChildren(fragment)
 }
 
@@ -591,17 +606,24 @@ function goalButton(label, action, secondary = false) {
   return button
 }
 
+function goalPhaseLabel(phase) {
+  if (phase === 'active') return t('goalPhaseActive')
+  if (phase === 'paused') return t('goalPhasePaused')
+  if (phase === 'blocked') return t('goalPhaseBlocked')
+  return t('goalPhaseComplete')
+}
+
 function renderComposer(active) {
   const ready = payload.state.phase === 'connected' || payload.state.phase === 'reconnecting'
   elements.prompt.disabled = !ready
   if (active?.subagentMode === 'one-shot') elements.prompt.disabled = true
   elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '' && attachments.length === 0)
   elements.send.textContent = active?.running ? '■' : '↑'
-  elements.send.title = active?.running ? '停止生成' : '发送 (Enter)'
+  elements.send.title = active?.running ? t('stopGenerating') : t('sendTitle')
   const usageText = tokenUsageText(active?.tokenUsage)
   elements.composerStatus.textContent = (active?.subagentMode === 'one-shot'
-    ? '一次性子 Agent · 只读'
-    : active?.running ? '运行中 · Enter 加入队列' : active?.model?.model || (active?.subagentMode === 'continuable' ? '可继续子 Agent' : '')) + usageText
+    ? t('oneShotReadOnly')
+    : active?.running ? t('runningQueue') : active?.model?.model || (active?.subagentMode === 'continuable' ? t('continuableSubagent') : '')) + usageText
 }
 
 function tokenUsageText(usage) {
@@ -717,9 +739,9 @@ function renderAttachmentRail() {
     const item = node('div', 'attachment-item')
     const image = document.createElement('img')
     image.src = `data:${attachment.mediaType};base64,${attachment.data}`
-    image.alt = attachment.name || '图片附件'
+    image.alt = attachment.name || t('imageAttachment')
     const remove = node('button', 'attachment-remove', '×')
-    remove.title = '移除图片'
+    remove.title = t('removeImage')
     remove.addEventListener('click', () => {
       attachments.splice(index, 1)
       renderAttachmentRail()
@@ -738,10 +760,10 @@ function readImage(file) {
     reader.addEventListener('load', () => {
       const result = typeof reader.result === 'string' ? reader.result : ''
       const comma = result.indexOf(',')
-      if (comma < 0) reject(new Error('图片读取失败'))
+      if (comma < 0) reject(new Error(t('imageReadFailed')))
       else resolve({ mediaType: file.type, data: result.slice(comma + 1), name: file.name })
     }, { once: true })
-    reader.addEventListener('error', () => reject(reader.error || new Error('图片读取失败')), { once: true })
+    reader.addEventListener('error', () => reject(reader.error || new Error(t('imageReadFailed'))), { once: true })
     reader.readAsDataURL(file)
   })
 }
@@ -794,21 +816,13 @@ function patchStreamingMessage(element, item) {
     if (!block || !rendered) return false
     if (block.kind === 'reasoning') {
       if (rendered.tagName !== 'DETAILS' || !rendered.classList.contains('reasoning-block')) return false
-      const text = rendered.querySelector('pre')
-      if (!text) return false
-      if (text.textContent !== block.text) text.textContent = block.text
+      const content = rendered.querySelector('.reasoning-content')
+      if (!content) return false
+      renderMarkdown(content, block.text, markdownActions)
     } else {
       if (!rendered.classList.contains('content-block') || !rendered.classList.contains(block.kind)) return false
-      if (rendered.classList.contains('md')) {
-        // Markdown-rendered block: rebuild the fragment in place when the raw
-        // text changed (it grows during streaming).
-        if (rendered.dataset.mdText !== block.text) {
-          rendered.replaceChildren(renderMarkdown(block.text))
-          rendered.dataset.mdText = block.text
-        }
-      } else if (rendered.textContent !== block.text) {
-        rendered.textContent = block.text
-      }
+      if (block.kind === 'text') renderMarkdown(rendered, block.text, markdownActions)
+      else if (rendered.textContent !== block.text) rendered.textContent = block.text
     }
   }
   const indicator = body.querySelector('.typing-indicator')
@@ -840,159 +854,14 @@ function isNearBottom(element) {
 
 function formatRelativeTime(time) {
   const delta = Date.now() - time
-  if (delta < 60_000) return '刚刚'
-  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)} 分钟前`
-  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)} 小时前`
+  if (delta < 60_000) return t('justNow')
+  if (delta < 3_600_000) return t('minutesAgo', { count: Math.floor(delta / 60_000) })
+  if (delta < 86_400_000) return t('hoursAgo', { count: Math.floor(delta / 3_600_000) })
   return new Date(time).toLocaleDateString()
 }
 
 function cssEscape(value) {
   return window.CSS?.escape ? window.CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
-}
-
-// ---------- Markdown rendering (XSS-safe: every text node via textContent) ----------
-
-function renderMarkdown(text) {
-  const fragment = document.createDocumentFragment()
-  const lines = text.split(/\r?\n/)
-  let paragraph = []
-  let list = null
-  let listOrdered = false
-  let code = null // { lang, lines }
-
-  const flushParagraph = () => {
-    if (paragraph.length === 0) return
-    const p = node('p', 'md-paragraph')
-    p.append(renderInline(paragraph.join(' ')))
-    fragment.append(p)
-    paragraph = []
-  }
-  const flushList = () => {
-    if (list === null) return
-    const wrap = node(listOrdered ? 'ol' : 'ul', 'md-list')
-    for (const item of list) wrap.append(item)
-    fragment.append(wrap)
-    list = null
-  }
-  const flushCode = () => {
-    if (code === null) return
-    const wrap = node('div', 'md-codeblock')
-    const header = node('div', 'md-codeblock-header')
-    header.append(node('span', 'md-codeblock-lang', code.lang || '代码'))
-    const copy = node('button', 'md-copy', '复制')
-    copy.type = 'button'
-    copy.addEventListener('click', () => copyText(code.lines.join('\n')))
-    header.append(copy)
-    const pre = node('pre')
-    const inner = node('code')
-    inner.textContent = code.lines.join('\n')
-    pre.append(inner)
-    wrap.append(header, pre)
-    fragment.append(wrap)
-    code = null
-  }
-
-  for (const raw of lines) {
-    if (code !== null) {
-      if (/^\s*```\s*$/.test(raw)) flushCode()
-      else code.lines.push(raw)
-      continue
-    }
-    const fenceOpen = /^\s*```([\w+-]*)\s*$/.exec(raw)
-    if (fenceOpen) {
-      flushParagraph()
-      flushList()
-      code = { lang: fenceOpen[1] || '', lines: [] }
-      continue
-    }
-    const heading = /^(#{1,4})\s+(.*)$/.exec(raw)
-    if (heading) {
-      flushParagraph()
-      flushList()
-      const h = node(`h${Math.min(heading[1].length + 1, 4)}`, 'md-heading')
-      h.append(renderInline(heading[2]))
-      fragment.append(h)
-      continue
-    }
-    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(raw)) {
-      flushParagraph()
-      flushList()
-      fragment.append(node('hr', 'md-hr'))
-      continue
-    }
-    const quote = /^>\s?(.*)$/.exec(raw)
-    if (quote) {
-      flushParagraph()
-      flushList()
-      const q = node('blockquote', 'md-quote')
-      q.append(renderInline(quote[1]))
-      fragment.append(q)
-      continue
-    }
-    const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(raw)
-    if (item) {
-      flushParagraph()
-      const ordered = /^\s*\d+/.test(raw)
-      // A marker-type change (-/1.) splits the list instead of merging items
-      // with different semantics into one <ul>/<ol>.
-      if (list !== null && ordered !== listOrdered) flushList()
-      if (list === null) {
-        list = []
-        listOrdered = ordered
-      }
-      const li = node('li', 'md-list-item')
-      li.append(renderInline(item[1]))
-      list.push(li)
-      continue
-    }
-    if (raw.trim() === '') {
-      flushParagraph()
-      flushList()
-      continue
-    }
-    paragraph.push(raw.trim())
-  }
-  flushParagraph()
-  flushList()
-  flushCode()
-  return fragment
-}
-
-// Only http(s) links are recognized; everything else stays plain text.
-const INLINE_TOKEN = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`\n]+`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g
-
-function renderInline(text) {
-  const fragment = document.createDocumentFragment()
-  let last = 0
-  let match
-  INLINE_TOKEN.lastIndex = 0
-  while ((match = INLINE_TOKEN.exec(text)) !== null) {
-    if (match.index > last) fragment.append(document.createTextNode(text.slice(last, match.index)))
-    const token = match[0]
-    if (token.startsWith('**')) {
-      fragment.append(node('strong', 'md-strong', token.slice(2, -2)))
-    } else if (token.startsWith('`')) {
-      fragment.append(node('code', 'md-inline-code', token.slice(1, -1)))
-    } else if (token.startsWith('[')) {
-      const close = token.lastIndexOf('](')
-      const label = token.slice(1, close)
-      const url = token.slice(close + 2, -1)
-      const link = node('a', 'md-link', label)
-      link.href = url
-      link.target = '_blank'
-      link.rel = 'noopener noreferrer'
-      link.addEventListener('click', (event) => {
-        event.preventDefault()
-        post('openExternal', { url })
-      })
-      fragment.append(link)
-    } else {
-      fragment.append(node('em', 'md-em', token.slice(1, -1)))
-    }
-    last = match.index + token.length
-  }
-  if (last < text.length) fragment.append(document.createTextNode(text.slice(last)))
-  return fragment
 }
 
 function copyText(text) {
@@ -1018,17 +887,17 @@ function legacyCopy(text) {
   area.remove()
 }
 
-// Uses the same `[选区: ` header as the host-side auto-attach marker
-// (SELECTION_MARKER_PREFIX in harness-gateway-service.ts) so the duplicate
+// Uses the same localized selection header as the host-side auto attachment
+// so duplicate detection in the extension host recognizes a manual insert.
 // detection in the extension host recognizes a manual insert.
 function insertSelection(selection) {
   if (!selection || !selection.text) return
-  const fileName = selection.file ? selection.file.split(/[\\/]/).pop() : '选区'
+  const fileName = selection.file ? selection.file.split(/[\\/]/).pop() : t('selectedCode')
   const ext = fileName.includes('.') ? fileName.split('.').pop() : ''
   const range = selection.startLine !== undefined && selection.endLine !== undefined
-    ? ` (${selection.startLine}-${selection.endLine} 行)`
+    ? t('selectionRange', { start: selection.startLine, end: selection.endLine })
     : ''
-  const snippet = `[选区: ${fileName}${range}${selection.tooLong ? '（已截断）' : ''}]:\n\`\`\`${ext}\n${selection.text}\n\`\`\`\n\n`
+  const snippet = `[${t('selectedCode')}: ${fileName}${range}${selection.tooLong ? t('truncated') : ''}]:\n\`\`\`${ext}\n${selection.text}\n\`\`\`\n\n`
   const prompt = elements.prompt
   const start = prompt.selectionStart ?? prompt.value.length
   const end = prompt.selectionEnd ?? start

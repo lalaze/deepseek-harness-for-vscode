@@ -105,9 +105,10 @@ export class HarnessHostRuntime implements vscode.Disposable {
       ...(apiKey === undefined || apiKey === '' ? {} : { DEEPSEEK_API_KEY: apiKey }),
       ...(configuration.baseUrl === undefined ? {} : { DEEPSEEK_BASE_URL: configuration.baseUrl }),
     }
-    this.output.appendLine(
-      `[host] 启动内置 Harness Gateway（cwd=${workspace}, model=${configuration.model}, reasoning=${configuration.reasoningEffort}, preset=${configuration.agentPreset}）`,
-    )
+    this.output.appendLine(vscode.l10n.t(
+      '[host] Starting bundled Harness Gateway (cwd={cwd}, model={model}, reasoning={reasoning}, preset={preset})',
+      { cwd: workspace, model: configuration.model, reasoning: configuration.reasoningEffort, preset: configuration.agentPreset },
+    ))
 
     const child = spawn(launch.command, args, { cwd: workspace, env, windowsHide: true })
     this.child = child
@@ -116,7 +117,7 @@ export class HarnessHostRuntime implements vscode.Disposable {
     return await new Promise<string>((resolve, reject) => {
       let settled = false
       let buffer = ''
-      const timeout = setTimeout(() => finish(new Error('内置 Harness Web 运行时启动超时，请查看输出日志。')), START_TIMEOUT_MS)
+      const timeout = setTimeout(() => finish(new Error(vscode.l10n.t('The bundled Harness runtime timed out while starting. Check the output logs.'))), START_TIMEOUT_MS)
 
       const finish = (result: string | Error): void => {
         if (settled) return
@@ -144,7 +145,10 @@ export class HarnessHostRuntime implements vscode.Disposable {
       child.once('error', (error) => finish(error))
       child.once('exit', (code, signal) => {
         if (this.child === child) this.child = undefined
-        const message = `内置 Harness Web 运行时已退出（code=${String(code)}, signal=${String(signal)}）。`
+        const message = vscode.l10n.t('The bundled Harness runtime exited (code={code}, signal={signal}).', {
+          code: String(code),
+          signal: String(signal),
+        })
         if (!settled) finish(new Error(message))
         else if (this.stateValue.phase !== 'stopping' && this.stateValue.phase !== 'idle') {
           this.setState({ phase: 'error', error: message })
@@ -173,7 +177,7 @@ export class HarnessHostRuntime implements vscode.Disposable {
       // spawnSync neither throws on a failing taskkill (status != 0) nor on a
       // missing executable (error set); either way descendants may survive.
       if (killed.error !== undefined || killed.status !== 0) {
-        this.output.appendLine('[host] taskkill 进程树终止失败，回退为直接终止（子进程可能残留）。')
+        this.output.appendLine(vscode.l10n.t('[host] Failed to terminate the process tree with taskkill; falling back to direct termination. Child processes may remain.'))
         child.kill()
       }
     } else {

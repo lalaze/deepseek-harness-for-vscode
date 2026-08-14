@@ -12,8 +12,19 @@ This platform extension bundle contains:
   - License: MIT and included third-party licenses
   - Source: https://github.com/nodejs/node
 
+- `markdown-it` 15.0.0
+  - Copyright: Vitaly Puzrin and Alex Kocharin
+  - License: MIT
+  - Source: https://github.com/markdown-it/markdown-it
+
+- `DOMPurify` 3.4.13
+  - Copyright: Cure53 and other contributors
+  - License: Apache-2.0 OR MPL-2.0
+  - Source: https://github.com/cure53/DOMPurify
+
 The DeepSeek Harness MIT license is reproduced below. Node.js and npm package
-license files are retained in the packaged dependency tree.
+license files are retained in the packaged dependency tree. The Webview bundle
+also embeds `markdown-it` and `DOMPurify`; their license files remain packaged.
 
 ```text
 MIT License

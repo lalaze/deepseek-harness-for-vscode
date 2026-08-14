@@ -25,6 +25,7 @@ src/
   runtime/      内置 Node/dsh 解析、配置覆盖和进程生命周期
   security/     settings.json API Key 与旧 SecretStorage 迁移
   ui/           Webview CSP、原生工作台和白名单消息桥
+  webview/      Markdown 安全渲染与 Webview 本地化契约
 media/          不依赖框架的 Webview 视图资源
 scripts/        平台 VSIX 打包入口
 test/           运行时解析、配置覆盖和事件投影单元测试
@@ -58,9 +59,17 @@ test/           运行时解析、配置覆盖和事件投影单元测试
 
 - Webview CSP 只允许扩展自身 CSS/JS，没有 `frame-src` 和远程脚本权限。
 - Gateway 只监听 `127.0.0.1` 随机端口；不暴露局域网服务。
-- 输入消息按字段类型校验；渲染使用 DOM `textContent`，工具输出不作为 HTML 注入。
+- 输入消息按字段类型校验；普通 UI 内容使用 DOM `textContent`，Markdown 禁用原始 HTML，并经过 DOMPurify 白名单净化。
+- Markdown 远程图片默认禁用；链接只允许 `http`/`https`，并由扩展宿主再次校验后交给系统浏览器打开。
 - `DEEPSEEK_API_KEY` 只注入独立 Harness 子进程环境。
 - 扩展设置 `DSH_TELEMETRY_DISABLED=1`。
+
+## 本地化边界
+
+- 扩展清单通过 `package.nls.json` 与 `package.nls.zh-cn.json` 本地化命令、视图和设置。
+- Extension Host 使用 VS Code `l10n` API，本机提示、运行时错误和领域投影均以英文为源语言。
+- Webview 从 Extension Host 接收已本地化的消息表，不自行判断操作系统语言；显示语言始终与 VS Code 一致。
+- 英文是默认语言，简体中文资源位于 `l10n/bundle.l10n.zh-cn.json`。
 
 ## 为什么需要平台包
 

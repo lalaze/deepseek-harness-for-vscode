@@ -125,15 +125,45 @@ export interface CommandEntry {
   readonly kind: 'host' | 'extension'
 }
 
+export interface WorkbenchLabels {
+  readonly commandModel: string
+  readonly commandReasoning: string
+  readonly commandPreset: string
+  readonly newConversation: string
+  readonly toolResult: string
+  readonly slashCommand: string
+  readonly imageAttachment: string
+  readonly completed: string
+  readonly session: string
+  readonly context: string
+  readonly generationStopped: string
+  readonly outputLimitReached: string
+  readonly taskBlocked: string
+  readonly turnFailed: string
+}
+
+export const ENGLISH_WORKBENCH_LABELS: WorkbenchLabels = {
+  commandModel: 'Switch the current session model (Flash / Pro)',
+  commandReasoning: 'Switch reasoning effort (off / high / max)',
+  commandPreset: 'Switch Agent Preset (standard / code / minimal / cordis)',
+  newConversation: 'New conversation',
+  toolResult: 'Tool result',
+  slashCommand: 'Slash command',
+  imageAttachment: '[Image attachment]',
+  completed: 'Completed',
+  session: 'Session',
+  context: 'Context',
+  generationStopped: 'Generation stopped',
+  outputLimitReached: 'Output limit reached',
+  taskBlocked: 'Task blocked',
+  turnFailed: 'Turn failed',
+}
+
 /** Extension-owned slash commands, appended after the runtime's host list. */
-export const EXTENSION_COMMANDS: readonly CommandEntry[] = [
-  { name: 'model', description: '切换当前会话模型（Flash / Pro）', kind: 'extension' },
-  { name: 'reasoning', description: '切换推理等级（off / high / max）', kind: 'extension' },
-  { name: 'preset', description: '切换 Agent Preset（standard / code / minimal / cordis）', kind: 'extension' },
-]
+export const EXTENSION_COMMANDS: readonly CommandEntry[] = extensionCommands(ENGLISH_WORKBENCH_LABELS)
 
 /** Projects the runtime `commands/list` payload into menu entries plus the local extensions. */
-export function projectionCommands(value: unknown): readonly CommandEntry[] {
+export function projectionCommands(value: unknown, labels = ENGLISH_WORKBENCH_LABELS): readonly CommandEntry[] {
   const hosts: CommandEntry[] = []
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -146,7 +176,15 @@ export function projectionCommands(value: unknown): readonly CommandEntry[] {
     }
   }
   hosts.sort((left, right) => left.name < right.name ? -1 : 1)
-  return [...hosts, ...EXTENSION_COMMANDS]
+  return [...hosts, ...extensionCommands(labels)]
+}
+
+function extensionCommands(labels: WorkbenchLabels): readonly CommandEntry[] {
+  return [
+    { name: 'model', description: labels.commandModel, kind: 'extension' },
+    { name: 'reasoning', description: labels.commandReasoning, kind: 'extension' },
+    { name: 'preset', description: labels.commandPreset, kind: 'extension' },
+  ]
 }
 
 export interface TokenUsageView {
@@ -163,9 +201,13 @@ export function projectionTokenUsage(value: unknown): TokenUsageView | undefined
   const outputTokens = value.outputTokens
   const cacheReadTokens = value.cacheReadTokens
   const cacheWriteTokens = value.cacheWriteTokens
-  if (typeof uncachedInputTokens !== 'number' || typeof outputTokens !== 'number'
-    || typeof cacheReadTokens !== 'number' || typeof cacheWriteTokens !== 'number') return undefined
+  if (!isTokenCount(uncachedInputTokens) || !isTokenCount(outputTokens)
+    || !isTokenCount(cacheReadTokens) || !isTokenCount(cacheWriteTokens)) return undefined
   return { uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 export interface GoalView {
@@ -188,11 +230,11 @@ export interface HarnessWorkbenchState {
 }
 
 /** Converts a Host summary to the small, stable DTO sent into the webview. */
-export function sessionListItem(summary: SessionSummary): SessionListItem {
+export function sessionListItem(summary: SessionSummary, labels = ENGLISH_WORKBENCH_LABELS): SessionListItem {
   const title = projectionTitle(summary.projections?.values)
   return {
     id: String(summary.sessionId),
-    title: title ?? (summary.blank ? '新对话' : fallbackTitle(summary)),
+    title: title ?? (summary.blank ? labels.newConversation : fallbackTitle(summary, labels)),
     ...(summary.cwd === undefined ? {} : { cwd: summary.cwd }),
     updatedAt: summary.updatedAt,
     running: summary.running,
@@ -248,7 +290,7 @@ export function projectionGoal(value: unknown): GoalView | undefined {
  * Projects the append-only Harness event log into a native chat transcript.
  * Raw events remain the source of truth; this function is intentionally pure.
  */
-export function projectConversation(entries: readonly HistoryEntry[]): {
+export function projectConversation(entries: readonly HistoryEntry[], labels = ENGLISH_WORKBENCH_LABELS): {
   readonly messages: ChatItem[]
   readonly todos: { readonly content: string; readonly status: string }[]
 } {
@@ -301,22 +343,22 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
           time: event.time,
           kind: human ? 'message' : 'context',
           role: 'user',
-          ...(!human ? { title: contextTitle(source) } : {}),
-          blocks: projectBlocks(event.data.content),
+          ...(!human ? { title: contextTitle(source, labels) } : {}),
+          blocks: projectBlocks(event.data.content, labels),
         })
         break
       }
       case 'assistant/chunk': {
         const key = stepKey(event.data.turn, event.data.step)
         if (finalSteps.has(key)) break
-        const partial = partials.get(key) ?? new PartialBlocks(event.seq, event.time)
+        const partial = partials.get(key) ?? new PartialBlocks(event.seq, event.time, labels)
         partial.push(event.data.chunk)
         partials.set(key, partial)
         break
       }
       case 'assistant/message': {
         if (isReplacement(event.surfaceOp)) break
-        const blocks = projectBlocks(event.data.message.content)
+        const blocks = projectBlocks(event.data.message.content, labels)
         if (blocks.length > 0) {
           messages.push({
             id: `event-${event.seq}`,
@@ -347,9 +389,9 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
           seq: event.seq,
           time: event.time,
           kind: 'tool',
-          title: '工具结果',
+          title: labels.toolResult,
           status: event.data.error === undefined ? 'success' : 'error',
-          detail: blockText(event.data.message.content),
+          detail: blockText(event.data.message.content, labels),
         })
         break
       }
@@ -361,7 +403,7 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
           time: event.time,
           name: event.data.name,
           ...(event.data.args === undefined ? {} : { args: event.data.args }),
-        }, done))
+        }, done, labels))
         break
       }
       case 'command/done': {
@@ -372,7 +414,7 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
           time: event.time,
           kind: event.data.kind,
           ...(event.data.text === undefined ? {} : { text: event.data.text }),
-        }))
+        }, labels))
         break
       }
       case 'todo/write':
@@ -385,7 +427,7 @@ export function projectConversation(entries: readonly HistoryEntry[]): {
             seq: event.seq,
             time: event.time,
             kind: 'notice',
-            title: turnEndTitle(event.data.reason.kind),
+            title: turnEndTitle(event.data.reason.kind, labels),
             status: event.data.reason.kind === 'error' ? 'error' : 'info',
             ...('error' in event.data.reason ? { detail: event.data.reason.error.message } : {}),
           })
@@ -415,8 +457,9 @@ function commandItem(
   commandId: string,
   run: { readonly seq: number; readonly time: number; readonly name: string; readonly args?: string } | undefined,
   done: { readonly seq: number; readonly time: number; readonly kind: 'success' | 'error'; readonly text?: string } | undefined,
+  labels: WorkbenchLabels,
 ): ChatItem {
-  const title = run === undefined ? '斜杠命令' : `/${run.name}${run.args ?? ''}`
+  const title = run === undefined ? labels.slashCommand : `/${run.name}${run.args ?? ''}`
   return {
     id: `command-${commandId}`,
     seq: run?.seq ?? done?.seq ?? 0,
@@ -433,7 +476,7 @@ class PartialBlocks {
   readonly time: number
   private readonly values = new Map<number, ChatBlock>()
 
-  constructor(seq: number, time: number) {
+  constructor(seq: number, time: number, private readonly labels: WorkbenchLabels) {
     this.seq = seq
     this.time = time
   }
@@ -452,7 +495,7 @@ class PartialBlocks {
         this.append(chunk.index, 'reasoning', chunk.text)
         break
       case 'block-end': {
-        const blocks = projectBlocks([chunk.block])
+        const blocks = projectBlocks([chunk.block], this.labels)
         const block = blocks[0]
         if (block !== undefined) this.values.set(chunk.index, block)
         break
@@ -472,20 +515,20 @@ class PartialBlocks {
   }
 }
 
-function projectBlocks(blocks: readonly unknown[]): ChatBlock[] {
+function projectBlocks(blocks: readonly unknown[], labels: WorkbenchLabels): ChatBlock[] {
   const result: ChatBlock[] = []
   for (const value of blocks) {
     if (!isRecord(value) || typeof value.type !== 'string') continue
     if ((value.type === 'text' || value.type === 'reasoning') && typeof value.text === 'string') {
       result.push({ kind: value.type, text: value.text })
     } else if (value.type === 'image') {
-      result.push({ kind: 'image', text: '[图片附件]' })
+      result.push({ kind: 'image', text: labels.imageAttachment })
     }
   }
   return result
 }
 
-function blockText(blocks: readonly unknown[]): string {
+function blockText(blocks: readonly unknown[], labels: WorkbenchLabels): string {
   const output: string[] = []
   const visit = (values: readonly unknown[]): void => {
     for (const value of values) {
@@ -495,16 +538,16 @@ function blockText(blocks: readonly unknown[]): string {
     }
   }
   visit(blocks)
-  return output.join('\n').trim() || '完成'
+  return output.join('\n').trim() || labels.completed
 }
 
-function fallbackTitle(summary: SessionSummary): string {
+function fallbackTitle(summary: SessionSummary, labels: WorkbenchLabels): string {
   const folder = summary.cwd?.split(/[\\/]/u).filter(Boolean).at(-1)
-  return folder === undefined ? `会话 ${String(summary.sessionId).slice(0, 8)}` : folder
+  return folder === undefined ? `${labels.session} ${String(summary.sessionId).slice(0, 8)}` : folder
 }
 
-function contextTitle(source: { readonly kind: string }): string {
-  return source.kind === 'plugin' ? '上下文' : source.kind
+function contextTitle(source: { readonly kind: string }, labels: WorkbenchLabels): string {
+  return source.kind === 'plugin' ? labels.context : source.kind
 }
 
 function stepKey(turn: number, step: number): string {
@@ -519,11 +562,11 @@ function prettyJson(value: string): string {
   }
 }
 
-function turnEndTitle(kind: string): string {
-  if (kind === 'aborted') return '已停止生成'
-  if (kind === 'max-tokens') return '已达到输出上限'
-  if (kind === 'blocked') return '任务被阻止'
-  return '本轮执行失败'
+function turnEndTitle(kind: string, labels: WorkbenchLabels): string {
+  if (kind === 'aborted') return labels.generationStopped
+  if (kind === 'max-tokens') return labels.outputLimitReached
+  if (kind === 'blocked') return labels.taskBlocked
+  return labels.turnFailed
 }
 
 function isReplacement(value: unknown): boolean {

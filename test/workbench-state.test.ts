@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
-import { EXTENSION_COMMANDS, projectConversation, projectionCommands } from '../src/domain/workbench-state.js'
+import {
+  EXTENSION_COMMANDS,
+  projectConversation,
+  projectionCommands,
+  projectionTokenUsage,
+} from '../src/domain/workbench-state.js'
 
 describe('projectConversation', () => {
   it('projects durable messages, reasoning, tools and the latest todo snapshot', () => {
@@ -94,6 +99,44 @@ describe('projectionCommands', () => {
   it('returns the extension commands only when the host list is empty or absent', () => {
     expect(projectionCommands([])).toEqual(EXTENSION_COMMANDS)
     expect(projectionCommands(undefined)).toEqual(EXTENSION_COMMANDS)
+  })
+})
+
+describe('projectionTokenUsage', () => {
+  it('accepts complete non-negative integer counters', () => {
+    expect(projectionTokenUsage({
+      uncachedInputTokens: 120,
+      outputTokens: 80,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 10,
+    })).toEqual({
+      uncachedInputTokens: 120,
+      outputTokens: 80,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 10,
+    })
+  })
+
+  it('rejects missing, negative, fractional and non-finite counters', () => {
+    expect(projectionTokenUsage({ uncachedInputTokens: 1 })).toBeUndefined()
+    expect(projectionTokenUsage({
+      uncachedInputTokens: -1,
+      outputTokens: 1,
+      cacheReadTokens: 1,
+      cacheWriteTokens: 1,
+    })).toBeUndefined()
+    expect(projectionTokenUsage({
+      uncachedInputTokens: 1.5,
+      outputTokens: 1,
+      cacheReadTokens: 1,
+      cacheWriteTokens: 1,
+    })).toBeUndefined()
+    expect(projectionTokenUsage({
+      uncachedInputTokens: Number.POSITIVE_INFINITY,
+      outputTokens: 1,
+      cacheReadTokens: 1,
+      cacheWriteTokens: 1,
+    })).toBeUndefined()
   })
 })
 

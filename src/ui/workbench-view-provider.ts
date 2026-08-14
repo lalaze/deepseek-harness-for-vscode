@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto'
 import * as vscode from 'vscode'
 import type { ConfigurationService } from '../config/configuration.js'
 import { AGENT_PRESET_OPTIONS, MODEL_OPTIONS, REASONING_OPTIONS } from '../domain/options.js'
-import { SELECTION_MARKER_PREFIX, type HarnessGatewayService, type PromptSelection } from '../gateway/harness-gateway-service.js'
+import { selectionMarkerPrefix, type HarnessGatewayService, type PromptSelection } from '../gateway/harness-gateway-service.js'
+import { localizeWebviewMessages, type WebviewMessageKey } from '../webview/localization.js'
 
 export interface WorkbenchViewActions {
   readonly setApiKey: () => Promise<void>
@@ -34,13 +35,16 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     this.view = view
     view.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.extensionUri, 'media'),
+        vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview'),
+      ],
     }
     view.webview.html = this.html(view.webview)
     this.subscriptions.push(view.webview.onDidReceiveMessage((message: unknown) => {
       void this.handleMessage(message).catch((cause: unknown) => {
         const detail = cause instanceof Error ? cause.message : String(cause)
-        void vscode.window.showErrorMessage(`DeepSeek Harness：${detail}`)
+        void vscode.window.showErrorMessage(vscode.l10n.t('DeepSeek Harness: {0}', detail))
       })
     }))
     void this.gateway.start()
@@ -77,9 +81,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         state,
         configuration: this.configuration.get(),
         fallbackOptions: {
-          models: MODEL_OPTIONS,
-          reasoning: REASONING_OPTIONS,
-          presets: AGENT_PRESET_OPTIONS,
+          models: MODEL_OPTIONS.map(localizedOption),
+          reasoning: REASONING_OPTIONS.map(localizedOption),
+          presets: AGENT_PRESET_OPTIONS.map(localizedOption),
         },
       })
     }
@@ -180,9 +184,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         break
       case 'createGoal': {
         const objective = await vscode.window.showInputBox({
-          title: '创建 Harness Goal',
-          prompt: 'Harness 会持续推进该目标，直到完成、暂停或达到轮次限制。',
-          validateInput: (input) => input.trim() === '' ? '目标不能为空。' : undefined,
+          title: vscode.l10n.t('Create Harness Goal'),
+          prompt: vscode.l10n.t('Harness will pursue this goal until it is completed, paused, or reaches its round limit.'),
+          validateInput: (input) => input.trim() === '' ? vscode.l10n.t('The goal cannot be empty.') : undefined,
         })
         if (objective !== undefined) await this.gateway.createGoal(objective.trim())
         break
@@ -195,9 +199,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'rename': {
         const current = await this.gateway.snapshot()
         const title = await vscode.window.showInputBox({
-          title: '重命名 Harness 会话',
+          title: vscode.l10n.t('Rename Harness session'),
           value: current.active?.title ?? '',
-          validateInput: (input) => input.trim() === '' ? '标题不能为空。' : undefined,
+          validateInput: (input) => input.trim() === '' ? vscode.l10n.t('The title cannot be empty.') : undefined,
         })
         if (title !== undefined) await this.gateway.rename(title)
         break
@@ -234,8 +238,8 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       id: model.id,
     }))
     const selected = await vscode.window.showQuickPick(items, {
-      title: '切换模型',
-      placeHolder: '选择当前会话使用的模型',
+      title: vscode.l10n.t('Switch model'),
+      placeHolder: vscode.l10n.t('Select the model for the current session'),
     })
     if (selected !== undefined) {
       const reasoning = current.active?.model?.reasoningEffort
@@ -245,13 +249,13 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
   private async pickReasoning(): Promise<void> {
     const items: ValuePickItem[] = REASONING_OPTIONS.map((item) => ({
-      label: item.label,
-      ...(item.description === undefined ? {} : { detail: item.description }),
+      label: vscode.l10n.t(item.label),
+      ...(item.description === undefined ? {} : { detail: vscode.l10n.t(item.description) }),
       value: item.id,
     }))
     const selected = await vscode.window.showQuickPick(items, {
-      title: '切换推理等级',
-      placeHolder: '选择当前会话的推理强度',
+      title: vscode.l10n.t('Switch reasoning effort'),
+      placeHolder: vscode.l10n.t('Select the reasoning effort for the current session'),
     })
     if (selected !== undefined) await this.gateway.selectReasoning(selected.value)
   }
@@ -264,17 +268,28 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         ...(item.description === undefined ? {} : { detail: item.description }),
         value: item.id,
       }))
-      : AGENT_PRESET_OPTIONS.map((item) => ({ label: item.label, ...(item.description === undefined ? {} : { detail: item.description }), value: item.id }))
-    const selected = await vscode.window.showQuickPick(items, { title: '切换 Agent Preset', placeHolder: '选择当前会话的 Agent 预设' })
+      : AGENT_PRESET_OPTIONS.map((item) => ({
+        label: vscode.l10n.t(item.label),
+        ...(item.description === undefined ? {} : { detail: vscode.l10n.t(item.description) }),
+        value: item.id,
+      }))
+    const selected = await vscode.window.showQuickPick(items, {
+      title: vscode.l10n.t('Switch Agent Preset'),
+      placeHolder: vscode.l10n.t('Select the Agent Preset for the current session'),
+    })
     if (selected !== undefined) await this.gateway.selectPreset(selected.value)
   }
 
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(18).toString('base64')
-    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'chat.js'))
+    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'chat.js'))
     const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'chat.css'))
+    const messages = localizeWebviewMessages((message) => vscode.l10n.t(message))
+    const text = (key: WebviewMessageKey): string => escapeHtml(messages[key])
+    const language = escapeHtml(vscode.env.language)
+    const localization = jsonForInlineScript({ language: vscode.env.language, messages })
     return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${language}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -285,82 +300,83 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 <body>
   <header class="shell-header">
     <div class="brand-row">
-      <button id="history-toggle" class="icon-button" title="对话历史" aria-label="对话历史">☰</button>
+      <button id="history-toggle" class="icon-button" title="${text('history')}" aria-label="${text('history')}">☰</button>
       <div class="brand"><span class="brand-mark">DS</span><strong>Harness</strong><span id="connection" class="connection"></span></div>
       <div class="header-actions">
-        <button id="new-session" class="icon-button" title="新对话" aria-label="新对话">＋</button>
-        <button id="open-settings" class="icon-button" title="扩展设置" aria-label="扩展设置">⚙</button>
+        <button id="new-session" class="icon-button" title="${text('newConversation')}" aria-label="${text('newConversation')}">＋</button>
+        <button id="open-settings" class="icon-button" title="${text('extensionSettings')}" aria-label="${text('extensionSettings')}">⚙</button>
       </div>
     </div>
     <div class="session-heading">
-      <button id="back-parent" class="icon-button compact hidden" title="返回父 Agent" aria-label="返回父 Agent">←</button>
-      <button id="session-title" class="title-button" title="重命名会话">新对话</button>
-      <button id="fork" class="icon-button compact" title="从当前进度创建分支" aria-label="创建分支">⑂</button>
+      <button id="back-parent" class="icon-button compact hidden" title="${text('backToParentAgent')}" aria-label="${text('backToParentAgent')}">←</button>
+      <button id="session-title" class="title-button" title="${text('renameConversation')}">${text('newConversation')}</button>
+      <button id="fork" class="icon-button compact" title="${text('forkConversation')}" aria-label="${text('forkConversation')}">⑂</button>
     </div>
-    <div class="selectors" aria-label="会话设置">
-      <label><span>模型</span><select id="model"></select></label>
-      <label><span>推理</span><select id="reasoning"></select></label>
-      <label><span>Agent</span><select id="preset"></select></label>
+    <div class="selectors" aria-label="${text('sessionSettings')}">
+      <label><span>${text('model')}</span><select id="model"></select></label>
+      <label><span>${text('reasoning')}</span><select id="reasoning"></select></label>
+      <label><span>${text('agent')}</span><select id="preset"></select></label>
     </div>
   </header>
 
   <section id="key-banner" class="key-banner hidden">
-    <span>请先在本机 settings.json 配置 DeepSeek API Key。</span>
-    <button id="set-api-key">配置</button>
+    <span>${text('apiKeyRequired')}</span>
+    <button id="set-api-key">${text('configure')}</button>
   </section>
 
-  <aside id="history-panel" class="history-panel hidden" aria-label="会话历史">
-    <div class="panel-heading"><strong>对话历史</strong><button id="history-close" class="icon-button">×</button></div>
-    <input id="history-search" class="search-input" type="search" placeholder="搜索会话…">
+  <aside id="history-panel" class="history-panel hidden" aria-label="${text('history')}">
+    <div class="panel-heading"><strong>${text('history')}</strong><button id="history-close" class="icon-button">×</button></div>
+    <input id="history-search" class="search-input" type="search" placeholder="${text('searchConversations')}">
     <div id="session-list" class="session-list"></div>
   </aside>
 
   <main id="workbench" class="workbench">
     <section id="loading" class="center-state">
-      <div class="spinner"></div><h2>正在启动 Harness</h2><p>扩展正在启动内置运行时，无需单独部署。</p>
+      <div class="spinner"></div><h2>${text('startingHarness')}</h2><p>${text('startingHarnessDescription')}</p>
     </section>
     <section id="error" class="center-state hidden">
-      <div class="error-icon">!</div><h2>连接失败</h2><p id="error-message"></p>
-      <div class="state-actions"><button id="retry" class="primary-button">重试</button><button id="show-logs" class="secondary-button">日志</button></div>
+      <div class="error-icon">!</div><h2>${text('connectionFailed')}</h2><p id="error-message"></p>
+      <div class="state-actions"><button id="retry" class="primary-button">${text('retry')}</button><button id="show-logs" class="secondary-button">${text('logs')}</button></div>
     </section>
     <section id="chat" class="chat hidden">
       <div id="conversation" class="conversation">
-        <button id="load-older" class="load-older hidden">加载更早记录</button>
+        <button id="load-older" class="load-older hidden">${text('loadOlder')}</button>
         <section id="empty" class="empty-state">
-          <div class="empty-mark">DS</div><h2>我能帮你完成什么？</h2><p>读取代码、编辑文件、运行命令、制定计划，或调用 Harness Agent 完成复杂任务。</p>
+          <div class="empty-mark">DS</div><h2>${text('emptyTitle')}</h2><p>${text('emptyDescription')}</p>
         </section>
         <div id="messages" class="messages" aria-live="polite"></div>
       </div>
 
       <section id="details" class="details hidden">
         <div class="detail-tabs">
-          <button data-detail="todos" class="active">计划 <span id="todo-count">0</span></button>
+          <button data-detail="todos" class="active">${text('plan')} <span id="todo-count">0</span></button>
           <button data-detail="goal">Goal</button>
-          <button data-detail="skills">Skills <span id="skill-count">0</span></button>
-          <button data-detail="agents">Agent <span id="agent-count">0</span></button>
-          <button data-detail="jobs">任务 <span id="job-count">0</span></button>
+          <button data-detail="skills">${text('skills')} <span id="skill-count">0</span></button>
+          <button data-detail="agents">${text('agents')} <span id="agent-count">0</span></button>
+          <button data-detail="jobs">${text('jobs')} <span id="job-count">0</span></button>
         </div>
         <div id="detail-content" class="detail-content"></div>
       </section>
 
       <div id="interactions" class="interactions"></div>
       <section class="composer-shell">
-        <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="斜杠命令"></div>
+        <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="${text('slashCommands')}"></div>
         <div id="attachment-rail" class="attachment-rail hidden"></div>
-        <textarea id="prompt" rows="1" placeholder="向 DeepSeek Harness 提问… 输入 / 查看命令" aria-label="消息"></textarea>
+        <textarea id="prompt" rows="1" placeholder="${text('promptPlaceholder')}" aria-label="${text('message')}"></textarea>
         <div class="composer-bar">
-          <button id="attach" class="text-button" title="添加图片">＋ 图片</button>
+          <button id="attach" class="text-button" title="${text('addImage')}">＋ ${text('image')}</button>
           <input id="image-input" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
-          <button id="attach-selection" class="text-button" title="附加当前编辑器选区到消息">⬒ 选区</button>
-          <button id="details-toggle" class="text-button" title="计划、Skills 与后台任务">上下文</button>
-          <select id="permission" class="permission-select hidden" title="Harness 文件和命令权限"></select>
+          <button id="attach-selection" class="text-button" title="${text('attachSelection')}">⬒ ${text('selection')}</button>
+          <button id="details-toggle" class="text-button" title="${text('contextDescription')}">${text('context')}</button>
+          <select id="permission" class="permission-select hidden" title="${text('permissionDescription')}"></select>
           <span id="composer-status" class="composer-status"></span>
-          <button id="send" class="send-button" title="发送 (Enter)" aria-label="发送">↑</button>
+          <button id="send" class="send-button" title="${text('sendTitle')}" aria-label="${text('send')}">↑</button>
         </div>
       </section>
-      <p class="composer-hint">Enter 发送 · Shift+Enter 换行 · 运行时再次发送会进入队列</p>
+      <p class="composer-hint">${text('composerHint')}</p>
     </section>
   </main>
+  <script nonce="${nonce}">globalThis.__DEEPSEEK_HARNESS_LOCALIZATION__=${localization};</script>
   <script nonce="${nonce}" src="${script}"></script>
 </body>
 </html>`
@@ -369,7 +385,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
 function requiredString(value: Record<string, unknown>, key: string): string {
   const item = value[key]
-  if (typeof item !== 'string' || item.trim() === '') throw new Error(`无效的 ${key}。`)
+  if (typeof item !== 'string' || item.trim() === '') throw new Error(vscode.l10n.t('Invalid {0}.', key))
   return item
 }
 
@@ -391,10 +407,10 @@ function numberValue(value: unknown): number | undefined {
 }
 
 function questionAnswers(value: unknown): { readonly id: string; readonly selected: readonly string[]; readonly custom?: string }[] {
-  if (!Array.isArray(value)) throw new Error('问题答案格式无效。')
+  if (!Array.isArray(value)) throw new Error(vscode.l10n.t('Invalid question answer format.'))
   return value.map((item) => {
     if (!isRecord(item) || typeof item.id !== 'string' || !Array.isArray(item.selected)) {
-      throw new Error('问题答案格式无效。')
+      throw new Error(vscode.l10n.t('Invalid question answer format.'))
     }
     const selected = item.selected.filter((choice): choice is string => typeof choice === 'string')
     const custom = optionalString(item.custom)
@@ -404,12 +420,12 @@ function questionAnswers(value: unknown): { readonly id: string; readonly select
 
 function promptImages(value: unknown): { readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; readonly data: string; readonly name?: string }[] {
   if (value === undefined) return []
-  if (!Array.isArray(value) || value.length > 8) throw new Error('图片附件格式无效。')
+  if (!Array.isArray(value) || value.length > 8) throw new Error(vscode.l10n.t('Invalid image attachment format.'))
   return value.map((item) => {
     if (!isRecord(item) || !isImageType(item.mediaType) || typeof item.data !== 'string') {
-      throw new Error('图片附件格式无效。')
+      throw new Error(vscode.l10n.t('Invalid image attachment format.'))
     }
-    if (item.data.length > 16_000_000) throw new Error('单张图片不能超过约 12 MB。')
+    if (item.data.length > 16_000_000) throw new Error(vscode.l10n.t('Each image must be approximately 12 MB or smaller.'))
     const name = optionalString(item.name)
     return { mediaType: item.mediaType, data: item.data, ...(name === undefined ? {} : { name }) }
   })
@@ -459,7 +475,7 @@ function activeEditorSelection(): {
 /**
  * Auto-attached selection context for the message being sent. Skips when the
  * setting is off, when the editor has no selection, or when the user already
- * embedded that selection manually (via the ⬒ 选区 button), which would
+ * embedded that selection manually (via the selection button), which would
  * otherwise duplicate the code in the prompt.
  */
 function autoSelection(text: string): PromptSelection | undefined {
@@ -479,10 +495,40 @@ function hasEmbeddedSelection(text: string, file: string | undefined): boolean {
   if (file === undefined) return false
   const name = file.split(/[\\/]/u).pop() ?? ''
   if (name === '') return false
-  return text.includes(`${SELECTION_MARKER_PREFIX}${name}`)
+  return text.includes(`${selectionMarkerPrefix()}${name}`)
 }
 
 function goalAction(value: unknown): 'pause' | 'resume' | 'complete' | 'clear' {
   if (value === 'pause' || value === 'resume' || value === 'complete' || value === 'clear') return value
-  throw new Error('Goal 操作无效。')
+  throw new Error(vscode.l10n.t('Invalid Goal action.'))
+}
+
+function localizedOption(option: { readonly id: string; readonly label: string; readonly description?: string }): {
+  readonly id: string
+  readonly label: string
+  readonly description?: string
+} {
+  return {
+    id: option.id,
+    label: vscode.l10n.t(option.label),
+    ...(option.description === undefined ? {} : { description: vscode.l10n.t(option.description) }),
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function jsonForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e')
+    .replaceAll('&', '\\u0026')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029')
 }

@@ -13,23 +13,23 @@ export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('DeepSeek Harness', { log: true })
   const configuration = new ConfigurationService()
   const credentials = new CredentialStore(context.secrets)
-  const resolver = new BundledRuntimeResolver(context)
+  const resolver = new BundledRuntimeResolver(context, (message, ...args) => vscode.l10n.t(message, ...args))
   const runtime = new HarnessHostRuntime(context, configuration, credentials, resolver, output)
   const gateway = new HarnessGatewayService(runtime, configuration, credentials, output)
   activeRuntime = runtime
 
   const setApiKey = async (): Promise<void> => {
     const value = await vscode.window.showInputBox({
-      title: '配置 DeepSeek API Key',
-      prompt: '密钥将写入本机 VS Code 用户 settings.json 的 deepseekHarness.apiKey。',
+      title: vscode.l10n.t('Configure DeepSeek API Key'),
+      prompt: vscode.l10n.t('The key will be written to deepseekHarness.apiKey in your local VS Code user settings.json.'),
       password: true,
       ignoreFocusOut: true,
-      validateInput: (input) => input.trim() === '' ? 'API Key 不能为空。' : undefined,
+      validateInput: (input) => input.trim() === '' ? vscode.l10n.t('The API Key cannot be empty.') : undefined,
     })
     if (value === undefined) return
     await credentials.setApiKey(value.trim())
     await provider.refresh()
-    void vscode.window.showInformationMessage('DeepSeek API Key 已写入本机 VS Code settings.json。')
+    void vscode.window.showInformationMessage(vscode.l10n.t('DeepSeek API Key was saved to the local VS Code settings.json.'))
   }
 
   const provider = new WorkbenchViewProvider(
@@ -58,12 +58,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('deepseekHarness.reloadRuntime', () => provider.refresh()),
     vscode.commands.registerCommand('deepseekHarness.setApiKey', setApiKey),
     vscode.commands.registerCommand('deepseekHarness.clearApiKey', async () => {
+      const clear = vscode.l10n.t('Clear')
       const answer = await vscode.window.showWarningMessage(
-        '确定要从本机 VS Code settings.json 清除 DeepSeek API Key 吗？',
+        vscode.l10n.t('Clear the DeepSeek API Key from the local VS Code settings.json?'),
         { modal: true },
-        '清除',
+        clear,
       )
-      if (answer !== '清除') return
+      if (answer !== clear) return
       await credentials.clearApiKey()
       await provider.refresh()
     }),

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2
+
+- 新增英文与简体中文本地化；命令、设置、宿主提示和原生对话工作台会自动跟随 VS Code 显示语言。
+- README 改为英文 GitHub 主页，并新增完整的 `README.zh-CN.md` 中文说明。
+- 对话正文与推理过程支持 Markdown：标题、列表、引用、代码、表格、删除线和链接均按 VS Code 主题渲染。
+- 代码块支持一键复制，http(s) 链接经扩展宿主校验后再交给系统浏览器打开。
+- 流式分片继续更新原消息块，Markdown 重排不会替换整条消息，保留展开状态与滚动位置。
+- 原始 HTML 默认禁用，渲染结果经过 DOMPurify 白名单净化；远程 Markdown 图片默认禁用，避免不可信内容执行或发起隐私请求。
+- 新增编辑器选区自动/手动附加、Token 用量显示及 `Ctrl/Cmd+Alt+H` 工作台快捷键。
+- 修复 Windows VSIX 打包与运行时进程树清理，新增 macOS、Linux、Windows 多平台 CI 构建发布。
+
 ## 0.4.1
 
 - 修复冷会话恢复时 `skills.list` 抢先执行导致的 `session not found (not attached)` 启动异常；可选目录失败不再拖垮整个工作台。

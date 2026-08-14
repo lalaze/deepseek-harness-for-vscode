@@ -32,6 +32,7 @@ import {
   type PendingApprovalView,
   type PendingQuestionView,
   type SubagentView,
+  type WorkbenchLabels,
 } from '../domain/workbench-state.js'
 import type { HarnessHostRuntime } from '../runtime/web-runtime.js'
 import type { CredentialStore } from '../security/credential-store.js'
@@ -70,7 +71,8 @@ export class HarnessGatewayService implements vscode.Disposable {
   private subagents: SubagentListEntry[] = []
   private subagentAddress: SubagentAddress | undefined
   private projections: Record<string, unknown> = {}
-  private commands: readonly CommandEntry[] = projectionCommands(undefined)
+  private readonly labels = localizedWorkbenchLabels()
+  private commands: readonly CommandEntry[] = projectionCommands(undefined, this.labels)
   private phase: HarnessWorkbenchState['phase'] = 'idle'
   private error: string | undefined
   private publishScheduled = false
@@ -113,7 +115,7 @@ export class HarnessGatewayService implements vscode.Disposable {
         } catch (cause) {
           // One damaged or legacy transcript must not take down the Gateway.
           // The user can still create a new session and inspect the log.
-          this.output.appendLine(`[gateway] 最近会话加载失败：${errorMessage(cause)}`)
+          this.output.appendLine(vscode.l10n.t('[gateway] Failed to load recent sessions: {0}', errorMessage(cause)))
         }
       }
       this.phase = 'connected'
@@ -134,16 +136,16 @@ export class HarnessGatewayService implements vscode.Disposable {
   async snapshot(): Promise<HarnessWorkbenchState> {
     const apiKey = await this.credentials.getApiKey()
     const hasApiKey = apiKey !== undefined && apiKey.trim() !== ''
-    const summaries = this.orderedSummaries().map(sessionListItem)
+    const summaries = this.orderedSummaries().map((summary) => sessionListItem(summary, this.labels))
     const activeSummary = this.activeSessionId === undefined ? undefined : this.summaries.get(this.activeSessionId)
-    const projected = projectConversation(this.entries)
+    const projected = projectConversation(this.entries, this.labels)
     const permissions = projectionPermissions(this.projections.permissions)
     const plan = projectionPlan(this.projections.plan)
     const goal = projectionGoal(this.projections.goal)
     const tokenUsage = projectionTokenUsage(this.projections.tokenUsage)
     const active = activeSummary === undefined ? undefined : {
       id: String(activeSummary.sessionId),
-      title: sessionListItem(activeSummary).title,
+      title: sessionListItem(activeSummary, this.labels).title,
       running: activeSummary.running,
       blank: activeSummary.blank,
       ...(activeSummary.agentPreset === undefined ? {} : { agentPreset: activeSummary.agentPreset }),
@@ -206,7 +208,7 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   async selectSession(sessionId: string): Promise<void> {
     if (!this.summaries.has(sessionId)) await this.refreshSessionList()
-    if (!this.summaries.has(sessionId)) throw new Error('找不到该会话。')
+    if (!this.summaries.has(sessionId)) throw new Error(vscode.l10n.t('Session not found.'))
     const generation = ++this.selectionGeneration
     this.activeSessionId = sessionId
     this.subagentAddress = undefined
@@ -220,7 +222,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.subagentCount = 0
     this.subagents = []
     this.projections = {}
-    this.commands = projectionCommands(undefined)
+    this.commands = projectionCommands(undefined, this.labels)
     this.fireChange()
 
     const client = this.requireClient()
@@ -246,7 +248,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       this.models = models
       this.fireChange()
     } catch (cause) {
-      this.output.appendLine(`[gateway] 会话 ${sessionId} 的模型目录加载失败：${errorMessage(cause)}`)
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the model catalog for session {0}: {1}', sessionId, errorMessage(cause)))
     }
     if (!this.isCurrentSelection(sessionId, generation)) return
 
@@ -263,9 +265,9 @@ export class HarnessGatewayService implements vscode.Disposable {
     if (subagents.status === 'fulfilled') {
       this.subagents = valueOf(subagents.value).entries
       this.subagentCount = this.subagents.length
-    } else this.logOptionalCatalogFailure('子 Agent', subagents.reason)
+    } else this.logOptionalCatalogFailure(vscode.l10n.t('sub-agent'), subagents.reason)
     if (commands.status === 'fulfilled') this.commands = commands.value
-    else this.logOptionalCatalogFailure('斜杠命令', commands.reason)
+    else this.logOptionalCatalogFailure(vscode.l10n.t('slash command'), commands.reason)
     this.fireChange()
   }
 
@@ -279,7 +281,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     if (summary?.origin === 'subagent' && summary.parentSessionId !== undefined) {
       await this.selectSession(String(summary.parentSessionId))
       const child = this.subagents.find((entry) => entry.kind === 'child' && String(entry.id) === sessionId)
-      if (child === undefined || child.kind !== 'child') throw new Error('无法从父会话解析该子 Agent。')
+      if (child === undefined || child.kind !== 'child') throw new Error(vscode.l10n.t('Could not resolve the sub-agent from its parent session.'))
       await this.selectSubagent(sessionId, child.mode)
       return
     }
@@ -339,8 +341,8 @@ export class HarnessGatewayService implements vscode.Disposable {
         clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }))
     } else {
-      if (this.subagentAddress.mode === 'one-shot') throw new Error('一次性子 Agent 的历史为只读。')
-      if (images.length > 0) throw new Error('子 Agent 继续对话暂不支持图片。')
+      if (this.subagentAddress.mode === 'one-shot') throw new Error(vscode.l10n.t('One-shot sub-agent history is read-only.'))
+      if (images.length > 0) throw new Error(vscode.l10n.t('Images are not supported when continuing a sub-agent conversation.'))
       valueOf(await this.requireClient().subagents.prompt({
         ...this.subagentAddress,
         content: content.flatMap((part) => part.type === 'text' ? [{ type: 'text' as const, text: part.text }] : []),
@@ -389,7 +391,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   async selectModel(provider: string, model: string, reasoningEffort?: string, persist = true): Promise<void> {
-    if (this.subagentAddress !== undefined) throw new Error('子 Agent 使用创建时确定的模型。')
+    if (this.subagentAddress !== undefined) throw new Error(vscode.l10n.t('Sub-agents use the model selected when they were created.'))
     const sessionId = this.requireActiveSession()
     const selected = valueOf(await this.requireClient().sessions.selectModel({
       sessionId: sessionId as SessionId,
@@ -407,7 +409,7 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   async selectReasoning(reasoningEffort: string): Promise<void> {
     const current = this.models?.current
-    if (current === undefined) throw new Error('当前会话尚未加载模型目录。')
+    if (current === undefined) throw new Error(vscode.l10n.t('The model catalog for the current session has not loaded yet.'))
     await this.selectModel(current.provider, current.model, reasoningEffort)
   }
 
@@ -441,8 +443,8 @@ export class HarnessGatewayService implements vscode.Disposable {
       this.commands = commands
     } catch (cause) {
       if (!this.isCurrentSelection(sessionId, generation)) return
-      this.commands = projectionCommands(undefined)
-      this.output.appendLine(`[gateway] 命令列表刷新失败：${errorMessage(cause)}`)
+      this.commands = projectionCommands(undefined, this.labels)
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to refresh the command list: {0}', errorMessage(cause)))
     }
     this.fireChange()
   }
@@ -459,7 +461,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   async mutateGoal(action: 'pause' | 'resume' | 'complete' | 'clear'): Promise<void> {
     const sessionId = this.requireActiveSession()
     const goal = projectionGoal(this.projections.goal)
-    if (goal === undefined) throw new Error('当前会话没有目标。')
+    if (goal === undefined) throw new Error(vscode.l10n.t('The current session has no goal.'))
     const ref = { id: goal.id as never, revision: goal.revision }
     const api = this.requireClient().goals
     if (action === 'pause') valueOf(await api.pause({ sessionId: sessionId as SessionId, ref }))
@@ -490,7 +492,7 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   async answerApproval(key: string, outcome: 'allowed-once' | 'rejected'): Promise<void> {
     const pending = this.approvals.get(key)
-    if (pending === undefined) throw new Error('该审批已失效。')
+    if (pending === undefined) throw new Error(vscode.l10n.t('This approval request is no longer active.'))
     await this.respond(pending.rpcId, {
       sessionId: this.requireActiveSession(),
       approvalId: pending.approvalId,
@@ -503,7 +505,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     answers: readonly { readonly id: string; readonly selected: readonly string[]; readonly custom?: string }[],
   ): Promise<void> {
     const pending = this.questions.get(key)
-    if (pending === undefined) throw new Error('该问题已失效。')
+    if (pending === undefined) throw new Error(vscode.l10n.t('This question is no longer active.'))
     await this.respond(pending.rpcId, {
       sessionId: this.requireActiveSession(),
       answer: {
@@ -537,7 +539,7 @@ export class HarnessGatewayService implements vscode.Disposable {
           this.handleMux(envelope.rpcId, envelope.payload)
         }
       } catch (cause) {
-        if (!signal.aborted) this.output.appendLine(`[gateway] mux 重连：${errorMessage(cause)}`)
+        if (!signal.aborted) this.output.appendLine(vscode.l10n.t('[gateway] Reconnecting Mux stream: {0}', errorMessage(cause)))
       }
       if (!signal.aborted) await this.waitToReconnect(signal)
     }
@@ -550,7 +552,7 @@ export class HarnessGatewayService implements vscode.Disposable {
           this.handleHost(envelope.payload)
         }
       } catch (cause) {
-        if (!signal.aborted) this.output.appendLine(`[gateway] host 重连：${errorMessage(cause)}`)
+        if (!signal.aborted) this.output.appendLine(vscode.l10n.t('[gateway] Reconnecting Host stream: {0}', errorMessage(cause)))
       }
       if (!signal.aborted) await this.waitToReconnect(signal)
     }
@@ -651,7 +653,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       this.hasMore = history.hasMore
       this.fireChange()
     } catch (cause) {
-      this.output.appendLine(`[gateway] 历史修复失败：${errorMessage(cause)}`)
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to repair session history: {0}', errorMessage(cause)))
     }
   }
 
@@ -676,17 +678,17 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   private async commandsFor(sessionId: string): Promise<readonly CommandEntry[]> {
     const client = this.requireClient()
-    if (!(client instanceof NodeGatewayClient)) return projectionCommands(undefined)
-    return projectionCommands(await client.listCommands(sessionId))
+    if (!(client instanceof NodeGatewayClient)) return projectionCommands(undefined, this.labels)
+    return projectionCommands(await client.listCommands(sessionId), this.labels)
   }
 
   private logOptionalCatalogFailure(name: string, cause: unknown): void {
-    this.output.appendLine(`[gateway] ${name} 目录加载失败：${errorMessage(cause)}`)
+    this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the {0} catalog: {1}', name, errorMessage(cause)))
   }
 
   private async applyPermission(value: string, persist: boolean): Promise<void> {
     if (value !== 'read-only' && value !== 'workspace-write' && value !== 'danger-full-access') {
-      throw new Error(`未知沙箱权限预设：${value}`)
+      throw new Error(vscode.l10n.t('Unknown sandbox permission preset: {0}', value))
     }
     await this.executeHostCommand(`/permission ${value}`)
     if (persist) await this.configuration.setPermissionModeIfKnown(value)
@@ -698,12 +700,12 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   private async executeHostCommand(line: string): Promise<void> {
-    if (this.subagentAddress !== undefined) throw new Error('子 Agent 不支持宿主斜杠命令。')
+    if (this.subagentAddress !== undefined) throw new Error(vscode.l10n.t('Sub-agents do not support host slash commands.'))
     const client = this.requireClient()
-    if (!(client instanceof NodeGatewayClient)) throw new Error('当前 Gateway 不支持宿主斜杠命令。')
+    if (!(client instanceof NodeGatewayClient)) throw new Error(vscode.l10n.t('The current Gateway does not support host slash commands.'))
     const execution = await client.executeCommand(this.requireActiveSession(), line)
-    if (execution === undefined) throw new Error(`Harness 无法识别命令：${line}`)
-    if (execution.result?.kind === 'error') throw new Error(execution.result.text ?? `命令执行失败：${line}`)
+    if (execution === undefined) throw new Error(vscode.l10n.t('Harness did not recognize command: {0}', line))
+    if (execution.result?.kind === 'error') throw new Error(execution.result.text ?? vscode.l10n.t('Command failed: {0}', line))
   }
 
   private applyTitleProjection(sessionId: string, title: string | undefined): void {
@@ -720,7 +722,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private async respond(rpcId: RpcId, value: unknown): Promise<void> {
     const message: ClientResponse = { type: 'client-response', rpcId, result: { ok: true, value } }
     const receipt = await this.requireClient().respond(message)
-    if (!receipt.accepted) throw new Error(`Harness 拒绝响应：${receipt.reason}`)
+    if (!receipt.accepted) throw new Error(vscode.l10n.t('Harness rejected the response: {0}', receipt.reason))
   }
 
   private markConnected(): void {
@@ -744,19 +746,19 @@ export class HarnessGatewayService implements vscode.Disposable {
     })
     if (!signal.aborted) {
       await this.refreshSessionList().catch((cause: unknown) => {
-        this.output.appendLine(`[gateway] 重连基线失败：${errorMessage(cause)}`)
+        this.output.appendLine(vscode.l10n.t('[gateway] Failed to refresh the reconnect baseline: {0}', errorMessage(cause)))
       })
       await this.repairHistory()
     }
   }
 
   private requireClient(): IApiClient {
-    if (this.client === undefined) throw new Error('Harness Gateway 尚未连接。')
+    if (this.client === undefined) throw new Error(vscode.l10n.t('Harness Gateway is not connected.'))
     return this.client
   }
 
   private requireActiveSession(): string {
-    if (this.activeSessionId === undefined) throw new Error('请先新建或选择一个会话。')
+    if (this.activeSessionId === undefined) throw new Error(vscode.l10n.t('Create or select a session first.'))
     return this.activeSessionId
   }
 
@@ -798,18 +800,22 @@ export interface PromptSelection {
  * (media/chat.js insertSelection) so duplicate detection only has to match
  * one marker prefix.
  */
-export const SELECTION_MARKER_PREFIX = '[选区: '
+export function selectionMarkerPrefix(): string {
+  return `[${vscode.l10n.t('Selection')}: `
+}
 
 function selectionPart(selection: PromptSelection): PromptContentPart {
-  const name = selection.file === undefined ? '选区' : selection.file.split(/[\\/]/u).pop() ?? '选区'
+  const name = selection.file === undefined
+    ? vscode.l10n.t('Selection')
+    : selection.file.split(/[\\/]/u).pop() ?? vscode.l10n.t('Selection')
   const ext = name.includes('.') ? name.split('.').pop() ?? '' : ''
   const range = selection.startLine !== undefined && selection.endLine !== undefined
-    ? ` (${selection.startLine}-${selection.endLine} 行)`
+    ? vscode.l10n.t(' (lines {start}-{end})', { start: selection.startLine, end: selection.endLine })
     : ''
-  const truncated = selection.tooLong === true ? '（已截断）' : ''
+  const truncated = selection.tooLong === true ? vscode.l10n.t(' (truncated)') : ''
   return {
     type: 'text',
-    text: `${SELECTION_MARKER_PREFIX}${name}${range}${truncated}]\n\`\`\`${ext}\n${selection.text}\n\`\`\``,
+    text: `${selectionMarkerPrefix()}${name}${range}${truncated}]\n\`\`\`${ext}\n${selection.text}\n\`\`\``,
   }
 }
 
@@ -855,5 +861,24 @@ function subagentView(entry: SubagentListEntry): SubagentView {
     hasChildren: entry.hasChildren,
     mode: entry.mode,
     ...('label' in entry && entry.label !== undefined ? { label: entry.label } : {}),
+  }
+}
+
+function localizedWorkbenchLabels(): WorkbenchLabels {
+  return {
+    commandModel: vscode.l10n.t('Switch the current session model (Flash / Pro)'),
+    commandReasoning: vscode.l10n.t('Switch reasoning effort (off / high / max)'),
+    commandPreset: vscode.l10n.t('Switch Agent Preset (standard / code / minimal / cordis)'),
+    newConversation: vscode.l10n.t('New conversation'),
+    toolResult: vscode.l10n.t('Tool result'),
+    slashCommand: vscode.l10n.t('Slash command'),
+    imageAttachment: vscode.l10n.t('[Image attachment]'),
+    completed: vscode.l10n.t('Completed'),
+    session: vscode.l10n.t('Session'),
+    context: vscode.l10n.t('Context'),
+    generationStopped: vscode.l10n.t('Generation stopped'),
+    outputLimitReached: vscode.l10n.t('Output limit reached'),
+    taskBlocked: vscode.l10n.t('Task blocked'),
+    turnFailed: vscode.l10n.t('Turn failed'),
   }
 }
