@@ -1,5 +1,6 @@
 import DOMPurify, { type Config } from 'dompurify'
 import MarkdownIt from 'markdown-it'
+import { findFileReferences, parseFileReference, type FileReference } from './file-reference.js'
 
 const markdown = new MarkdownIt({
   html: false,
@@ -26,6 +27,7 @@ const renderedSources = new WeakMap<HTMLElement, string>()
 
 export interface MarkdownActions {
   readonly openExternal: (url: string) => void
+  readonly openFile: (reference: FileReference) => void
   readonly copyCode: (code: string) => void
   readonly defaultCodeLanguage: string
   readonly copyLabel: string
@@ -50,7 +52,13 @@ export function renderMarkdown(target: HTMLElement, source: string, actions: Mar
   target.innerHTML = String(clean)
   renderedSources.set(target, source)
   target.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((link) => {
-    const url = safeExternalUrl(link.getAttribute('href') ?? '')
+    const href = link.getAttribute('href') ?? ''
+    const reference = parseFileReference(href)
+    if (reference !== undefined) {
+      decorateFileLink(link, reference, actions)
+      return
+    }
+    const url = safeExternalUrl(href)
     if (url === undefined) {
       link.removeAttribute('href')
       return
@@ -64,6 +72,54 @@ export function renderMarkdown(target: HTMLElement, source: string, actions: Mar
     })
   })
   target.querySelectorAll<HTMLPreElement>('pre').forEach((pre) => decorateCodeBlock(pre, actions))
+  target.querySelectorAll<HTMLElement>('code').forEach((code) => {
+    if (code.closest('pre') !== null) return
+    const reference = parseFileReference(code.textContent ?? '')
+    if (reference !== undefined) decorateFileLink(code, reference, actions)
+  })
+  decoratePlainTextReferences(target, actions)
+}
+
+function decoratePlainTextReferences(target: HTMLElement, actions: MarkdownActions): void {
+  const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
+  const nodes: Text[] = []
+  while (walker.nextNode()) {
+    const text = walker.currentNode
+    if (text instanceof Text && text.parentElement?.closest('a, button, code, pre, .md-file-link') === null) nodes.push(text)
+  }
+  for (const textNode of nodes) {
+    const source = textNode.data
+    const references = findFileReferences(source)
+    if (references.length === 0) continue
+    const fragment = document.createDocumentFragment()
+    let offset = 0
+    for (const reference of references) {
+      fragment.append(source.slice(offset, reference.start))
+      const link = document.createElement('span')
+      link.textContent = source.slice(reference.start, reference.end)
+      decorateFileLink(link, reference, actions)
+      fragment.append(link)
+      offset = reference.end
+    }
+    fragment.append(source.slice(offset))
+    textNode.replaceWith(fragment)
+  }
+}
+
+function decorateFileLink(element: HTMLElement, reference: FileReference, actions: MarkdownActions): void {
+  element.removeAttribute('href')
+  element.classList.add('md-file-link')
+  element.setAttribute('role', 'link')
+  element.tabIndex = 0
+  const open = (event: Event): void => {
+    event.preventDefault()
+    actions.openFile(reference)
+  }
+  element.addEventListener('click', open)
+  element.addEventListener('keydown', (event) => {
+    if (!(event instanceof KeyboardEvent) || (event.key !== 'Enter' && event.key !== ' ')) return
+    open(event)
+  })
 }
 
 function decorateCodeBlock(pre: HTMLPreElement, actions: MarkdownActions): void {

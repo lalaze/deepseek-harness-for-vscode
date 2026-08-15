@@ -1,5 +1,5 @@
 import { constants as fsConstants } from 'node:fs'
-import { access } from 'node:fs/promises'
+import { access, chmod, mkdir, writeFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -35,10 +35,12 @@ export class BundledRuntimeResolver {
       'bin',
       process.platform === 'win32' ? 'node.exe' : 'node',
     ))
+    const pnpm = this.context.asAbsolutePath(path.join('node_modules', 'pnpm', 'bin', 'pnpm.mjs'))
     try {
       await Promise.all([
         access(entry, fsConstants.R_OK),
         access(node, process.platform === 'win32' ? fsConstants.R_OK : fsConstants.R_OK | fsConstants.X_OK),
+        access(pnpm, fsConstants.R_OK),
       ])
     } catch {
       throw new Error(this.localize('The bundled DeepSeek Harness runtime is incomplete. Reinstall the VSIX.'))
@@ -56,12 +58,48 @@ export class BundledRuntimeResolver {
       throw new Error(this.localize('The bundled Node version is not supported by Harness: {0}.', versionText || this.localize('unknown')))
     }
 
+    const tooling = await this.prepareTooling()
     return {
       command: node,
       args: [entry],
-      environment: { ...process.env },
+      environment: {
+        ...process.env,
+        PATH: [tooling, path.dirname(node), process.env.PATH].filter(Boolean).join(path.delimiter),
+        DSH_BUNDLED_NODE: node,
+        DSH_BUNDLED_PNPM: pnpm,
+      },
     }
   }
+
+  /** Provides the `pnpm` executable name expected by the official DSH CLI. */
+  private async prepareTooling(): Promise<string> {
+    const directory = path.join(this.context.globalStorageUri.fsPath, 'runtime-bin')
+    await mkdir(directory, { recursive: true })
+    const tooling = pnpmWrapper(process.platform)
+    const wrapper = path.join(directory, tooling.filename)
+    await writeFile(wrapper, tooling.content, 'utf8')
+    if (tooling.executable) await chmod(wrapper, 0o755)
+    return directory
+  }
+}
+
+/** Cross-platform shim consumed by DSH's official `spawnSync("pnpm")`. */
+export function pnpmWrapper(platform: NodeJS.Platform): {
+  readonly filename: string
+  readonly content: string
+  readonly executable: boolean
+} {
+  return platform === 'win32'
+    ? {
+      filename: 'pnpm.cmd',
+      content: '@echo off\r\n"%DSH_BUNDLED_NODE%" "%DSH_BUNDLED_PNPM%" %*\r\n',
+      executable: false,
+    }
+    : {
+      filename: 'pnpm',
+      content: '#!/bin/sh\nexec "$DSH_BUNDLED_NODE" "$DSH_BUNDLED_PNPM" "$@"\n',
+      executable: true,
+    }
 }
 
 export type RuntimeLocalize = (message: string, ...args: Array<string | number | boolean>) => string

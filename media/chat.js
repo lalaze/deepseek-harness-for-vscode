@@ -4,7 +4,11 @@ import { composerConfigurationInput } from '../src/webview/composer-configuratio
 import { createComposerConfigurationComponent } from '../src/webview/composer-configuration/component.js'
 import { composerStatusText } from '../src/webview/composer-status.js'
 import { createContextMeterComponent } from '../src/webview/context-meter/component.js'
+import { createEditorContextComponent } from '../src/webview/editor-context/component.js'
+import { createFileMentionComponent } from '../src/webview/file-mention/component.js'
 import { permissionSelectOptions } from '../src/webview/permission/adapter.js'
+import { createPluginCenterComponent } from '../src/webview/plugin-center/component.js'
+import { StreamingMessageComponent } from '../src/webview/streaming-message/component.js'
 import { createWorkDurationComponent } from '../src/webview/work-duration/component.js'
 
 const vscode = acquireVsCodeApi()
@@ -64,6 +68,7 @@ let interactionSignature = ''
 let detailSignature = ''
 const markdownActions = {
   openExternal: (url) => post('openExternal', { url }),
+  openFile: (reference) => post('openFile', reference),
   copyCode: (code) => copyText(code),
   defaultCodeLanguage: t('code'),
   copyLabel: t('copy'),
@@ -76,9 +81,49 @@ const composerConfiguration = createComposerConfigurationComponent({
   onOpen: closeCommandMenu,
 })
 const contextMeter = createContextMeterComponent({ document, translate: t })
+const editorContext = createEditorContextComponent({
+  document,
+  translate: t,
+  onRequestSelection: () => post('attachSelection'),
+  onOpenFile: (reference) => post('openFile', reference),
+})
+const fileMention = createFileMentionComponent({
+  document,
+  prompt: elements.prompt,
+  translate: t,
+  onSearch: (query, requestId) => post('searchWorkspaceFiles', { query, requestId }),
+  onChoose: (file) => editorContext.addFile(file),
+  onOpen: closeCommandMenu,
+})
 const workDuration = createWorkDurationComponent({ document, translate: t })
+const streamingMessage = new StreamingMessageComponent({
+  document,
+  reasoningLabel: () => t('reasoningProcess'),
+  thinkingLabel: () => t('thinking'),
+  renderMarkdown: (target, source) => renderMarkdown(target, source, markdownActions),
+  onStreamFrame: () => {
+    if (isNearBottom(elements.conversation)) elements.conversation.scrollTop = elements.conversation.scrollHeight
+  },
+})
+const pluginCenter = createPluginCenterComponent({
+  document,
+  translate: t,
+  onOpen: () => toggleHistory(false),
+  onLoad: (force) => post('loadPlugins', { force }),
+  onInstall: ({ spec, name, repositoryUrl }) => post('installPlugin', {
+    spec,
+    ...(name === undefined ? {} : { name }),
+    ...(repositoryUrl === undefined ? {} : { repositoryUrl }),
+  }),
+  onRemove: (name) => post('removePlugin', { name }),
+  onOpenExternal: (url) => post('openExternal', { url }),
+})
 
 window.addEventListener('message', (event) => {
+  if (event.data?.type === 'pluginState') {
+    pluginCenter.update(event.data.snapshot)
+    return
+  }
   if (event.data?.type === 'searchResults') {
     if (event.data.query === elements.historySearch.value.trim()) {
       searchResults = event.data.results
@@ -86,8 +131,12 @@ window.addEventListener('message', (event) => {
     }
     return
   }
-  if (event.data?.type === 'selectionAttached') {
-    insertSelection(event.data)
+  if (event.data?.type === 'editorSelection') {
+    editorContext.updateSelection(event.data.selection)
+    return
+  }
+  if (event.data?.type === 'workspaceFileSuggestions') {
+    fileMention.acceptSuggestions(event.data.requestId, event.data.query, event.data.files || [])
     return
   }
   if (event.data?.type !== 'state') return
@@ -111,6 +160,8 @@ elements.historySearch.addEventListener('input', () => {
 })
 elements.newSession.addEventListener('click', () => {
   composerConfiguration.reset()
+  fileMention.close()
+  editorContext.markSubmitted()
   post('newSession')
 })
 elements.sessionTitle.addEventListener('click', () => post('rename'))
@@ -181,7 +232,6 @@ elements.prompt.addEventListener('keydown', (event) => {
 elements.prompt.addEventListener('blur', () => {
   setTimeout(() => { if (!elements.commandMenu.matches(':hover')) closeCommandMenu() }, 120)
 })
-elements.attachSelection.addEventListener('click', () => post('attachSelection'))
 elements.permission.addEventListener('change', () => post('setPermission', { value: elements.permission.value }))
 for (const tab of document.querySelectorAll('[data-detail]')) {
   tab.addEventListener('click', () => {
@@ -194,6 +244,7 @@ function render() {
   if (!payload) return
   const { state } = payload
   const active = state.active
+  editorContext.setAutoAttach(payload.configuration?.autoAttachSelection === true)
   renderPhase(state)
   if (!elements.historyPanel.classList.contains('hidden')) renderSessions()
   renderSelectors(active)
@@ -360,22 +411,7 @@ function renderMessage(item) {
   const label = node('div', 'message-label', item.role === 'user' ? t('you') : 'DeepSeek')
   article.append(label)
   const body = node('div', 'message-body')
-  for (const [index, block] of (item.blocks || []).entries()) {
-    if (block.kind === 'reasoning') {
-      const details = node('details', 'reasoning-block')
-      details.dataset.disclosureKey = `reasoning-${index}`
-      const content = node('div', 'reasoning-content markdown-body')
-      renderMarkdown(content, block.text, markdownActions)
-      details.append(node('summary', '', t('reasoningProcess')), content)
-      body.append(details)
-    } else {
-      const content = node('div', `content-block ${block.kind}${block.kind === 'text' ? ' markdown-body' : ''}`)
-      if (block.kind === 'text') renderMarkdown(content, block.text, markdownActions)
-      else content.textContent = block.text
-      body.append(content)
-    }
-  }
-  if (item.status === 'running') body.append(node('span', 'typing-indicator', '● ● ●'))
+  streamingMessage.render(body, item)
   article.append(body)
   workDuration.update(article, item.workDuration)
   return article
@@ -683,6 +719,7 @@ function closeCommandMenu() {
 
 function sendPrompt() {
   closeCommandMenu()
+  fileMention.close()
   composerConfiguration.close()
   const text = elements.prompt.value.trim()
   if (!text) return
@@ -691,8 +728,10 @@ function sendPrompt() {
   post('sendPrompt', {
     text,
     mode: 'queue',
+    context: editorContext.input(),
     ...(configuration === undefined ? {} : { configuration }),
   })
+  editorContext.markSubmitted()
   elements.prompt.value = ''
   resizePrompt()
 }
@@ -704,6 +743,7 @@ function resizePrompt() {
 }
 
 function toggleHistory(open) {
+  if (open) pluginCenter.close()
   elements.historyPanel.classList.toggle('hidden', !open)
   if (open) {
     renderSessions()
@@ -736,27 +776,7 @@ function patchStreamingMessage(element, item) {
   if (item.kind !== 'message' || element.tagName !== 'ARTICLE') return false
   const body = element.querySelector('.message-body')
   if (!body) return false
-  const blocks = item.blocks || []
-  const renderedBlocks = [...body.children].filter((child) => !child.classList.contains('typing-indicator'))
-  if (renderedBlocks.length !== blocks.length) return false
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index]
-    const rendered = renderedBlocks[index]
-    if (!block || !rendered) return false
-    if (block.kind === 'reasoning') {
-      if (rendered.tagName !== 'DETAILS' || !rendered.classList.contains('reasoning-block')) return false
-      const content = rendered.querySelector('.reasoning-content')
-      if (!content) return false
-      renderMarkdown(content, block.text, markdownActions)
-    } else {
-      if (!rendered.classList.contains('content-block') || !rendered.classList.contains(block.kind)) return false
-      if (block.kind === 'text') renderMarkdown(rendered, block.text, markdownActions)
-      else if (rendered.textContent !== block.text) rendered.textContent = block.text
-    }
-  }
-  const indicator = body.querySelector('.typing-indicator')
-  if (item.status === 'running' && !indicator) body.append(node('span', 'typing-indicator', '● ● ●'))
-  else if (item.status !== 'running') indicator?.remove()
+  if (!streamingMessage.patch(body, item)) return false
   workDuration.update(element, item.workDuration)
   return true
 }
@@ -769,7 +789,9 @@ function captureDisclosures(root) {
 
 function restoreDisclosures(root, state) {
   for (const details of disclosureElements(root)) {
-    details.open = state.get(details.dataset.disclosureKey || '') === true
+    if (details.dataset.autoOpen === 'true') details.open = true
+    else if (details.dataset.autoOpen === 'false') details.open = false
+    else details.open = state.get(details.dataset.disclosureKey || '') === true
   }
 }
 
@@ -815,29 +837,6 @@ function legacyCopy(text) {
     // Clipboard unavailable; the user can still select the text manually.
   }
   area.remove()
-}
-
-// Uses the same localized selection header as the host-side auto attachment
-// so duplicate detection in the extension host recognizes a manual insert.
-// detection in the extension host recognizes a manual insert.
-function insertSelection(selection) {
-  if (!selection || !selection.text) return
-  const fileName = selection.file ? selection.file.split(/[\\/]/).pop() : t('selectedCode')
-  const ext = fileName.includes('.') ? fileName.split('.').pop() : ''
-  const range = selection.startLine !== undefined && selection.endLine !== undefined
-    ? t('selectionRange', { start: selection.startLine, end: selection.endLine })
-    : ''
-  const snippet = `[${t('selectedCode')}: ${fileName}${range}${selection.tooLong ? t('truncated') : ''}]:\n\`\`\`${ext}\n${selection.text}\n\`\`\`\n\n`
-  const prompt = elements.prompt
-  const start = prompt.selectionStart ?? prompt.value.length
-  const end = prompt.selectionEnd ?? start
-  prompt.value = prompt.value.slice(0, start) + snippet + prompt.value.slice(end)
-  resizePrompt()
-  renderComposer(payload?.state.active)
-  prompt.focus()
-  // Keep the caret at the end of the inserted snippet; text that followed the
-  // insertion point stays after it and further input lands in the right spot.
-  prompt.setSelectionRange(start + snippet.length, start + snippet.length)
 }
 
 vscode.postMessage({ type: 'ready' })

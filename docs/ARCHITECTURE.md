@@ -15,17 +15,47 @@ HarnessGatewayService（会话状态、历史修复、业务命令）
 HarnessHostRuntime（VSIX 内置 Node + 官方 dsh Gateway）
 ```
 
+插件管理与对话 RPC 使用两条相互隔离的应用链路：
+
+```text
+PluginCenterComponent（搜索、分类、安装状态）
+       │ 仅传递经过校验的 package spec / UI DTO
+       ▼
+WorkbenchViewProvider（确认与安全提示）
+       ├── DshPluginCatalogService（数据源编排与确定性合并）
+       │     ├── GitHubDshPluginTopicSource（真实 Topic 搜索结果）
+       │     └── CuratedDshPluginSource（分类、翻译与 npm 元数据）
+       └── DshPluginManager（官方 web profile 安装状态与 pnpm 命令）
+                         │ 运行时停止期间执行
+                         ▼
+       bundled dsh plugin --profile web + bundled pnpm
+```
+
+编辑器上下文使用第三条受限链路，文件正文不会进入 Webview：
+
+```text
+EditorSelectionService ── metadata + opaque id ──► EditorContextComponent
+WorkspaceFileService  ── ranked file DTOs ──────► @ FileMentionComponent
+        ▲                         │ opaque ids / safe open reference
+        └─────────────────────────┘
+        │ Extension Host 校验、读取并限制在当前 workspace
+        ▼
+PromptAttachment[] ──► HarnessGatewayService
+```
+
 ## 目录职责
 
 ```text
 src/
   config/       VS Code 用户配置、枚举校验和持久化
   domain/       领域选项、事件日志到原生 UI DTO 的纯投影
+  editor/       编辑器选区快照、工作区文件索引、模糊排序和安全跳转
   gateway/      Gateway 传输、重连、会话与交互应用服务
+  plugins/      插件目录投影、package spec 校验与官方 profile 管理
   runtime/      内置 Node/dsh 解析、配置覆盖和进程生命周期
   security/     settings.json API Key 与旧 SecretStorage 迁移
   ui/           Webview CSP、原生工作台和白名单消息桥
-  webview/      Markdown 安全渲染与 Webview 本地化契约
+  webview/      独立 UI 组件、流式消息状态机、Markdown 安全渲染与本地化契约
 media/          不依赖框架的 Webview 视图资源
 scripts/        平台 VSIX 打包入口
 test/           运行时解析、配置覆盖和事件投影单元测试
@@ -60,9 +90,13 @@ test/           运行时解析、配置覆盖和事件投影单元测试
 - Webview CSP 只允许扩展自身 CSS/JS，没有 `frame-src` 和远程脚本权限。
 - Gateway 只监听 `127.0.0.1` 随机端口；不暴露局域网服务。
 - 输入消息按字段类型校验；普通 UI 内容使用 DOM `textContent`，Markdown 禁用原始 HTML，并经过 DOMPurify 白名单净化。
-- Markdown 远程图片默认禁用；链接只允许 `http`/`https`，并由扩展宿主再次校验后交给系统浏览器打开。
+- Markdown 远程图片默认禁用；外链只允许 `http`/`https`，工作区文件引用由扩展宿主再次解析并拒绝越界路径。
+- 选中代码正文只保存在 Extension Host 的短期缓存；Webview 只能提交宿主签发的不透明选区/文件 ID，不能指定任意文件作为消息附件。
 - `DEEPSEEK_API_KEY` 只注入独立 Harness 子进程环境。
 - 扩展设置 `DSH_TELEMETRY_DISABLED=1`。
+- 插件目录只接受固定 HTTPS 主机、严格安装命令格式和单一 package spec；Webview 不直接发起网络或进程操作。
+- DSH 在 Windows 上使用 shell 转发 pnpm，因此插件 spec 禁止空白和 shell 元字符，避免拆参与命令注入。
+- 第三方插件的宿主代码在 Agent 沙箱之外运行；安装前必须显示权限边界并由用户确认。
 
 ## 本地化边界
 

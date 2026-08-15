@@ -25,6 +25,8 @@ export interface SessionListItem {
 export interface ChatBlock {
   readonly kind: 'text' | 'reasoning' | 'image'
   readonly text: string
+  /** Present only while the runtime is still emitting deltas for this block. */
+  readonly streaming?: boolean
 }
 
 export interface ChatItem {
@@ -514,7 +516,7 @@ class PartialBlocks {
     switch (chunk.type) {
       case 'block-start':
         if (chunk.blockType === 'text' || chunk.blockType === 'reasoning') {
-          this.values.set(chunk.index, { kind: chunk.blockType, text: '' })
+          this.values.set(chunk.index, { kind: chunk.blockType, text: '', streaming: true })
         }
         break
       case 'text-delta':
@@ -540,7 +542,7 @@ class PartialBlocks {
 
   private append(index: number, kind: 'text' | 'reasoning', text: string): void {
     const previous = this.values.get(index)
-    this.values.set(index, { kind, text: (previous?.kind === kind ? previous.text : '') + text })
+    this.values.set(index, { kind, text: (previous?.kind === kind ? previous.text : '') + text, streaming: true })
   }
 }
 

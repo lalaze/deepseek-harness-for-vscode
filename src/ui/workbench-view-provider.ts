@@ -3,7 +3,11 @@ import * as vscode from 'vscode'
 import type { ConfigurationService } from '../config/configuration.js'
 import { AGENT_PRESET_OPTIONS, MODEL_OPTIONS, REASONING_OPTIONS } from '../domain/options.js'
 import { promptConfiguration } from '../domain/prompt-configuration.js'
-import { selectionMarkerPrefix, type HarnessGatewayService, type PromptSelection } from '../gateway/harness-gateway-service.js'
+import type { EditorSelectionService } from '../editor/editor-selection-service.js'
+import type { OpenWorkspaceFileRequest } from '../editor/types.js'
+import type { WorkspaceFileService } from '../editor/workspace-file-service.js'
+import type { HarnessGatewayService } from '../gateway/harness-gateway-service.js'
+import type { DshPluginCenterController } from '../plugins/plugin-center-controller.js'
 import { localizeWebviewMessages, type WebviewMessageKey } from '../webview/localization.js'
 
 export interface WorkbenchViewActions {
@@ -25,10 +29,17 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     private readonly extensionUri: vscode.Uri,
     private readonly configuration: ConfigurationService,
     private readonly gateway: HarnessGatewayService,
+    private readonly pluginCenter: DshPluginCenterController,
+    private readonly editorSelection: EditorSelectionService,
+    private readonly workspaceFiles: WorkspaceFileService,
     private readonly actions: WorkbenchViewActions,
   ) {
     this.subscriptions = [gateway.onDidChange(() => {
       void this.publishState().catch(() => undefined)
+    }), pluginCenter.onDidChange((snapshot) => {
+      void this.view?.webview.postMessage({ type: 'pluginState', snapshot })
+    }), editorSelection.onDidChange((selection) => {
+      void this.view?.webview.postMessage({ type: 'editorSelection', selection })
     })]
   }
 
@@ -95,6 +106,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     switch (value.type) {
       case 'ready':
         await this.publishState()
+        await this.publishEditorSelection()
         break
       case 'retry':
         await this.refresh()
@@ -104,6 +116,19 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         break
       case 'openSettings':
         await this.actions.openSettings()
+        break
+      case 'loadPlugins':
+        await this.pluginCenter.load(value.force === true)
+        break
+      case 'installPlugin':
+        await this.pluginCenter.install(
+          requiredString(value, 'spec'),
+          optionalString(value.name),
+          optionalHttpUrl(value.repositoryUrl),
+        )
+        break
+      case 'removePlugin':
+        await this.pluginCenter.remove(requiredString(value, 'name'))
         break
       case 'showLogs':
         this.actions.showLogs()
@@ -138,10 +163,16 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           throw new Error(vscode.l10n.t('Invalid model or mode configuration.'))
         }
         if (staged !== undefined) await this.gateway.applyPromptConfiguration(staged)
+        const context = promptContextInput(value.context)
+        const selectionId = context === undefined && this.configuration.get().autoAttachSelection
+          ? this.editorSelection.current()?.id
+          : context?.selectionId
+        const selection = this.editorSelection.attachment(selectionId)
+        const files = await this.workspaceFiles.attachments(context?.fileIds ?? [])
         await this.gateway.prompt(
           text,
           value.mode === 'steer' ? 'steer' : 'queue',
-          this.configuration.get().autoAttachSelection ? autoSelection(text) : undefined,
+          [...(selection === undefined ? [] : [selection]), ...files],
         )
         break
       }
@@ -159,10 +190,26 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         if (uri !== undefined) void vscode.env.openExternal(uri)
         break
       }
+      case 'searchWorkspaceFiles': {
+        const query = typeof value.query === 'string' ? value.query.slice(0, 200) : ''
+        const requestId = numberValue(value.requestId)
+        const files = await this.workspaceFiles.search(query)
+        await this.view?.webview.postMessage({ type: 'workspaceFileSuggestions', query, requestId, files })
+        break
+      }
+      case 'openFile': {
+        const request = openFileRequest(value)
+        if (!await this.workspaceFiles.open(request)) {
+          void vscode.window.showWarningMessage(vscode.l10n.t('File is not available in the current workspace.'))
+        }
+        break
+      }
       case 'attachSelection': {
-        // Reads the active editor selection so the webview can attach it to
-        // the prompt as explicit context.
-        await this.view?.webview.postMessage({ type: 'selectionAttached', ...activeEditorSelection() })
+        const selection = this.editorSelection.current()
+        await this.view?.webview.postMessage({ type: 'editorSelection', selection })
+        if (selection === undefined) {
+          void vscode.window.showInformationMessage(vscode.l10n.t('Select code in an editor first.'))
+        }
         break
       }
       case 'loadCommands':
@@ -209,6 +256,13 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     }
   }
 
+  private async publishEditorSelection(): Promise<void> {
+    await this.view?.webview.postMessage({
+      type: 'editorSelection',
+      selection: this.editorSelection.current(),
+    })
+  }
+
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(18).toString('base64')
     const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'chat.js'))
@@ -234,6 +288,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <div class="brand"><img class="brand-logo" src="${logo}" alt=""><strong>Harness</strong><span id="connection" class="connection"></span></div>
       <div class="header-actions">
         <button id="new-session" class="icon-button" title="${text('newConversation')}" aria-label="${text('newConversation')}">＋</button>
+        <button id="plugins-toggle" class="icon-button" title="${text('plugins')}" aria-label="${text('plugins')}" aria-expanded="false" aria-controls="plugin-panel">⊞</button>
         <button id="open-settings" class="icon-button" title="${text('extensionSettings')}" aria-label="${text('extensionSettings')}">⚙</button>
       </div>
     </div>
@@ -253,6 +308,42 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     <div class="panel-heading"><strong>${text('history')}</strong><button id="history-close" class="icon-button">×</button></div>
     <input id="history-search" class="search-input" type="search" placeholder="${text('searchConversations')}">
     <div id="session-list" class="session-list"></div>
+  </aside>
+
+  <aside id="plugin-panel" class="plugin-panel hidden" aria-label="${text('pluginCenter')}">
+    <header class="plugin-panel-heading">
+      <div><strong>${text('pluginCenter')}</strong><small>web profile</small></div>
+      <div class="plugin-panel-actions">
+        <button id="plugin-refresh" class="icon-button compact" title="${text('refreshPlugins')}" aria-label="${text('refreshPlugins')}">↻</button>
+        <button id="plugin-close" class="icon-button compact" title="${text('closePluginCenter')}" aria-label="${text('closePluginCenter')}">×</button>
+      </div>
+    </header>
+    <nav class="plugin-tabs" aria-label="${text('pluginCenter')}">
+      <button class="active" data-plugin-tab="marketplace">${text('pluginMarketplace')}</button>
+      <button data-plugin-tab="installed">${text('installedPlugins')}</button>
+    </nav>
+    <section id="plugin-marketplace-view" class="plugin-panel-view">
+      <div class="plugin-filter-row">
+        <input id="plugin-search" class="search-input" type="search" placeholder="${text('searchPlugins')}" aria-label="${text('searchPlugins')}">
+        <select id="plugin-category" class="plugin-category" aria-label="${text('allCategories')}"></select>
+      </div>
+      <p class="plugin-security-notice">⚠ ${text('pluginSecurityNotice')}</p>
+      <div id="plugin-marketplace-list" class="plugin-list"></div>
+      <button id="plugin-load-more" class="secondary-button hidden" type="button">${text('loadMorePlugins')}</button>
+      <footer class="plugin-source-footer">
+        <span id="plugin-summary"></span>
+        <span><button id="plugin-source" class="link-button" type="button">${text('curatedPlugins')}</button> · <button id="plugin-topic" class="link-button" type="button">${text('browsePluginTopic')}</button></span>
+      </footer>
+    </section>
+    <section id="plugin-installed-view" class="plugin-panel-view hidden">
+      <form id="plugin-custom-form" class="plugin-custom-form">
+        <strong>${text('installCustomPlugin')}</strong>
+        <div><input id="plugin-custom-spec" class="search-input" type="text" placeholder="${text('customPluginPlaceholder')}" aria-label="${text('customPluginPlaceholder')}"><button class="primary-button" type="submit">${text('install')}</button></div>
+      </form>
+      <p class="plugin-compatibility-notice">${text('nativeUiCompatibilityNotice')}</p>
+      <div id="plugin-installed-list" class="plugin-list"></div>
+    </section>
+    <div id="plugin-status" class="plugin-status hidden" role="status"></div>
   </aside>
 
   <main id="workbench" class="workbench">
@@ -311,6 +402,8 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
             <p id="configuration-hint">${text('configurationAppliesNextMessage')}</p>
           </footer>
         </section>
+        <div id="editor-context-list" class="editor-context-list hidden" aria-label="${text('attachedContext')}"></div>
+        <div id="file-mention-menu" class="file-mention-menu hidden" role="listbox" aria-label="${text('workspaceFiles')}"></div>
         <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="${text('slashCommands')}"></div>
         <textarea id="prompt" rows="1" placeholder="${text('promptPlaceholder')}" aria-label="${text('message')}"></textarea>
         <div class="composer-bar">
@@ -359,6 +452,11 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
+function optionalHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  return safeExternalUri(value)?.toString()
+}
+
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined
 }
@@ -379,8 +477,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-const MAX_SELECTION_CHARS = 16_000
-
 /** Only ever hands out http(s) URLs to the external browser. */
 function safeExternalUri(raw: string): vscode.Uri | undefined {
   try {
@@ -392,50 +488,27 @@ function safeExternalUri(raw: string): vscode.Uri | undefined {
   return undefined
 }
 
-/** Snapshot of the active editor selection, truncated for prompt embedding. */
-function activeEditorSelection(): {
-  readonly file?: string
-  readonly text?: string
-  readonly startLine?: number
-  readonly endLine?: number
-  readonly tooLong?: boolean
-} {
-  const editor = vscode.window.activeTextEditor
-  if (editor === undefined || editor.selection.isEmpty) return {}
-  const { document, selection } = editor
-  const text = document.getText(selection)
-  const startLine = selection.start.line + 1
-  const endLine = selection.end.line + 1
-  if (text.length > MAX_SELECTION_CHARS) {
-    return { file: document.uri.fsPath, text: text.slice(0, MAX_SELECTION_CHARS), startLine, endLine, tooLong: true }
-  }
-  return { file: document.uri.fsPath, text, startLine, endLine }
+function promptContextInput(value: unknown): { readonly selectionId?: string; readonly fileIds: readonly string[] } | undefined {
+  if (!isRecord(value)) return undefined
+  const selectionId = optionalString(value.selectionId)
+  const fileIds = Array.isArray(value.fileIds)
+    ? [...new Set(value.fileIds.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 8)
+    : []
+  return { ...(selectionId === undefined ? {} : { selectionId }), fileIds }
 }
 
-/**
- * Auto-attached selection context for the message being sent. Skips when the
- * setting is off, when the editor has no selection, or when the user already
- * embedded that selection manually (via the selection button), which would
- * otherwise duplicate the code in the prompt.
- */
-function autoSelection(text: string): PromptSelection | undefined {
-  const selection = activeEditorSelection()
-  if (selection.text === undefined) return undefined
-  if (hasEmbeddedSelection(text, selection.file)) return undefined
+function openFileRequest(value: Record<string, unknown>): OpenWorkspaceFileRequest {
+  const id = optionalString(value.id)
+  const filePath = optionalString(value.path)
+  const line = numberValue(value.line)
+  const column = numberValue(value.column)
+  if (id === undefined && filePath === undefined) throw new Error(vscode.l10n.t('Invalid file reference.'))
   return {
-    text: selection.text,
-    ...(selection.file === undefined ? {} : { file: selection.file }),
-    ...(selection.startLine === undefined ? {} : { startLine: selection.startLine }),
-    ...(selection.endLine === undefined ? {} : { endLine: selection.endLine }),
-    ...(selection.tooLong === true ? { tooLong: true } : {}),
+    ...(id === undefined ? {} : { id }),
+    ...(filePath === undefined ? {} : { path: filePath }),
+    ...(line === undefined ? {} : { line }),
+    ...(column === undefined ? {} : { column }),
   }
-}
-
-function hasEmbeddedSelection(text: string, file: string | undefined): boolean {
-  if (file === undefined) return false
-  const name = file.split(/[\\/]/u).pop() ?? ''
-  if (name === '') return false
-  return text.includes(`${selectionMarkerPrefix()}${name}`)
 }
 
 function goalAction(value: unknown): 'pause' | 'resume' | 'complete' | 'clear' {

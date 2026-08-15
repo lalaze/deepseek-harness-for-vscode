@@ -20,6 +20,7 @@ import type { AgentPresetEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { ConfigurationService } from '../config/configuration.js'
 import { projectionContextPressure } from '../domain/context-pressure.js'
 import { isPermissionPresetId, type PermissionPresetId } from '../domain/permissions.js'
+import type { PromptAttachment } from '../domain/prompt-context.js'
 import { agentPresetTransition, type PromptConfiguration } from '../domain/prompt-configuration.js'
 import {
   projectConversation,
@@ -134,6 +135,17 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.disconnect()
     await this.runtime.restart()
     await this.start()
+  }
+
+  /** Stops the Host around profile mutations, then reconnects even on failure. */
+  async mutateRuntime<T>(mutation: () => Promise<T>): Promise<T> {
+    this.disconnect()
+    await this.runtime.stop()
+    try {
+      return await mutation()
+    } finally {
+      await this.start()
+    }
   }
 
   async snapshot(): Promise<HarnessWorkbenchState> {
@@ -346,10 +358,10 @@ export class HarnessGatewayService implements vscode.Disposable {
   async prompt(
     text: string,
     mode: 'queue' | 'steer' = 'queue',
-    selection?: PromptSelection,
+    attachments: readonly PromptAttachment[] = [],
   ): Promise<void> {
     const normalized = text.trim()
-    if (normalized === '' && selection === undefined) return
+    if (normalized === '' && attachments.length === 0) return
     if (this.activeSessionId === undefined) await this.createSession()
     const sessionId = this.requireActiveSession()
     if (this.subagentAddress === undefined && this.isRegisteredHostCommand(normalized)) {
@@ -357,7 +369,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       return
     }
     const content: PromptContentPart[] = [
-      ...(selection === undefined ? [] : [selectionPart(selection)]),
+      ...attachments.map(attachmentPart),
       ...(normalized === '' ? [] : [{ type: 'text' as const, text: normalized }]),
     ]
     if (this.subagentAddress === undefined) {
@@ -815,36 +827,19 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 }
 
-/** A snapshot of the active editor selection attached as prompt context. */
-export interface PromptSelection {
-  readonly file?: string
-  readonly text: string
-  readonly startLine?: number
-  readonly endLine?: number
-  readonly tooLong?: boolean
-}
-
-/**
- * Single selection header format shared with the webview's manual insert
- * (media/chat.js insertSelection) so duplicate detection only has to match
- * one marker prefix.
- */
-export function selectionMarkerPrefix(): string {
-  return `[${vscode.l10n.t('Selection')}: `
-}
-
-function selectionPart(selection: PromptSelection): PromptContentPart {
-  const name = selection.file === undefined
+function attachmentPart(attachment: PromptAttachment): PromptContentPart {
+  const name = attachment.file === undefined
     ? vscode.l10n.t('Selection')
-    : selection.file.split(/[\\/]/u).pop() ?? vscode.l10n.t('Selection')
+    : attachment.file
   const ext = name.includes('.') ? name.split('.').pop() ?? '' : ''
-  const range = selection.startLine !== undefined && selection.endLine !== undefined
-    ? vscode.l10n.t(' (lines {start}-{end})', { start: selection.startLine, end: selection.endLine })
+  const range = attachment.startLine !== undefined && attachment.endLine !== undefined
+    ? vscode.l10n.t(' (lines {start}-{end})', { start: attachment.startLine, end: attachment.endLine })
     : ''
-  const truncated = selection.tooLong === true ? vscode.l10n.t(' (truncated)') : ''
+  const truncated = attachment.tooLong === true ? vscode.l10n.t(' (truncated)') : ''
+  const label = attachment.kind === 'file' ? vscode.l10n.t('File') : vscode.l10n.t('Selection')
   return {
     type: 'text',
-    text: `${selectionMarkerPrefix()}${name}${range}${truncated}]\n\`\`\`${ext}\n${selection.text}\n\`\`\``,
+    text: `[${label}: ${name}${range}${truncated}]\n\`\`\`${ext}\n${attachment.text}\n\`\`\``,
   }
 }
 

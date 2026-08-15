@@ -1,6 +1,11 @@
 import * as vscode from 'vscode'
 import { ConfigurationService } from './config/configuration.js'
+import { EditorSelectionService } from './editor/editor-selection-service.js'
+import { WorkspaceFileService } from './editor/workspace-file-service.js'
 import { HarnessGatewayService } from './gateway/harness-gateway-service.js'
+import { DshPluginCatalogService } from './plugins/plugin-catalog.js'
+import { DshPluginCenterController } from './plugins/plugin-center-controller.js'
+import { DshPluginManager } from './plugins/plugin-manager.js'
 import { BundledRuntimeResolver } from './runtime/bundled-runtime.js'
 import { HarnessHostRuntime } from './runtime/web-runtime.js'
 import { CredentialStore } from './security/credential-store.js'
@@ -16,6 +21,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const resolver = new BundledRuntimeResolver(context, (message, ...args) => vscode.l10n.t(message, ...args))
   const runtime = new HarnessHostRuntime(context, configuration, credentials, resolver, output)
   const gateway = new HarnessGatewayService(runtime, configuration, credentials, output)
+  const pluginManager = new DshPluginManager(context, resolver, output)
+  const pluginCatalog = new DshPluginCatalogService()
+  const pluginCenter = new DshPluginCenterController(pluginManager, pluginCatalog, gateway)
+  const editorSelection = new EditorSelectionService()
+  const workspaceFiles = new WorkspaceFileService()
   activeRuntime = runtime
 
   const setApiKey = async (): Promise<void> => {
@@ -36,6 +46,9 @@ export function activate(context: vscode.ExtensionContext): void {
     context.extensionUri,
     configuration,
     gateway,
+    pluginCenter,
+    editorSelection,
+    workspaceFiles,
     {
       setApiKey,
       openSettings: async () => {
@@ -50,6 +63,9 @@ export function activate(context: vscode.ExtensionContext): void {
     configuration,
     runtime,
     gateway,
+    pluginCenter,
+    editorSelection,
+    workspaceFiles,
     provider,
     vscode.window.registerWebviewViewProvider(WorkbenchViewProvider.viewType, provider, {
       webviewOptions: { retainContextWhenHidden: true },

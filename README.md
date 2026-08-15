@@ -4,21 +4,23 @@
 
 A native VS Code coding-agent extension powered by [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Install the platform-specific VSIX and start working—there is no upstream repository to clone, no Node/npm setup, and no local Harness deployment to manage.
 
-> This is a community-maintained `0.4.2` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
+> This is a community-maintained `0.4.4` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
 
 ## Features
 
 - **Native VS Code workbench** — all interaction happens in the sidebar; the official WebUI is never embedded.
 - **Complete session workflow** — persistent history, create, switch, rename, fork, and resume sessions.
-- **Streaming Markdown** — headings, lists, tables, blockquotes, inline formatting, code blocks, copy controls, and safe external links.
+- **Streaming Markdown** — headings, lists, tables, code blocks, copy controls, safe external links, and clickable workspace file references.
 - **Stable incremental rendering** — streamed updates preserve disclosure state and the reader's scroll position.
-- **Editor selection context** — automatically attach selected code or insert it explicitly with the “⬒ Selection” button.
+- **Claude-style live reasoning** — reasoning opens automatically while deltas stream, follows the newest text, and collapses when its block completes.
+- **Editor context** — selected code appears as a removable context card; type `@` to fuzzy-search and attach workspace files without leaving the composer.
 - **Slash commands** — use official Harness commands plus `/model`, `/reasoning`, and `/preset` extension commands.
 - **Harness-native capabilities** — reasoning, tool calls, approvals, structured questions, Todos, Skills, Goals, Plan mode, and background jobs.
 - **Model and agent controls** — DeepSeek V4 Flash / Pro, `off` / `high` / `max` reasoning effort, and four official Agent Presets.
 - **Token usage** — see current input and output token counts in the composer.
+- **Native DSH plugin center** — search a curated catalog, filter by category, inspect installed plugins, or install an npm/GitHub/local/tarball package.
 - **Automatic localization** — follows the VS Code display language with English and Simplified Chinese support.
-- **Zero-deployment runtime** — official `dsh` and standalone Node 22.22.3 are bundled in each platform VSIX and managed by the extension.
+- **Zero-deployment runtime** — official `dsh`, pnpm, and standalone Node 22.22.3 are bundled in each platform VSIX and managed by the extension.
 
 Open the workbench with `Ctrl+Alt+H` on Windows/Linux or `Cmd+Alt+H` on macOS.
 
@@ -48,6 +50,16 @@ For example, an Apple Silicon Mac requires the `darwin-arm64` package.
 4. Describe your task in the composer and send it.
 
 No Harness install or start command is required.
+
+## DSH plugins
+
+Open the **⊞ Plugins** button in the workbench header to browse repositories read directly from the [`dsh-plugin` GitHub topic](https://github.com/topics/dsh-plugin). Results are merged with [Awesome DSH Plugin](https://awesome-dsh-plugin.com/) metadata for curated categories, localized descriptions, and npm install specs. The **Installed** tab also accepts one package spec directly, including an npm package, `github:owner/repository`, a local path without shell metacharacters, or a tarball URL.
+
+The extension uses the official `dsh plugin --profile web add/remove` workflow. Plugin profile files live under the extension's `globalStorageUri/harness-home/profiles/web`; Harness is stopped while pnpm changes that profile and is then restarted automatically. The bundled pnpm means no system package manager is required.
+
+Host tools, policies, and runtime services contributed by a plugin work in this extension. A plugin may also contain client UI designed specifically for the upstream DSH browser application; those UI contributions cannot be rendered generically by this native VS Code workbench and are marked **Official Web UI**.
+
+Marketplace cards classify known entries as **Agent compatible**, **Agent works · Web UI unavailable**, or **Official Web UI only**. UI-only themes and layout extensions cannot affect the native workbench, so their install button is disabled. GitHub-only entries without curated metadata are marked **Compatibility unknown** until their installed manifest can be inspected.
 
 ## Configuration
 
@@ -84,10 +96,12 @@ English is the default language, and a Simplified Chinese language pack is inclu
 
 - The Harness Gateway listens only on a random `127.0.0.1` port.
 - The Webview uses a strict CSP and loads no remote scripts or iframes.
+- Plugin catalog JSON is fetched by the Extension Host, validated into a narrow UI data model, and rendered with `textContent`.
 - Raw Markdown HTML is disabled, and rendered markup is sanitized through a DOMPurify allowlist.
 - Remote Markdown images are disabled; http(s) links are validated again by the extension host.
 - File and command access is controlled by `permissionMode` and Harness approval policies.
 - The API Key is never sent to the Webview or written to extension logs.
+- Third-party DSH plugins are trusted Extension Host dependencies: they run outside the Agent sandbox. Review their source before installation.
 
 ## Platform support
 

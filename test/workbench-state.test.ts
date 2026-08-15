@@ -39,7 +39,7 @@ describe('projectConversation', () => {
       entry(0, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } }),
       entry(1, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: '流式' } }),
     ] as HistoryEntry[]
-    expect(projectConversation(partial).messages[0]?.blocks).toEqual([{ kind: 'text', text: '流式' }])
+    expect(projectConversation(partial).messages[0]?.blocks).toEqual([{ kind: 'text', text: '流式', streaming: true }])
 
     const finalized = [...partial, entry(2, 'assistant/message', {
       turn: 1, step: 1,
@@ -50,6 +50,24 @@ describe('projectConversation', () => {
     }, 'append')] as HistoryEntry[]
     expect(projectConversation(finalized).messages).toHaveLength(1)
     expect(projectConversation(finalized).messages[0]?.blocks).toEqual([{ kind: 'text', text: '最终' }])
+  })
+
+  it('marks reasoning complete at block-end while the following text still streams', () => {
+    const entries = [
+      entry(0, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'reasoning' } }),
+      entry(1, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 0, text: '先分析' } }),
+      entry(2, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '先分析' } },
+      }),
+      entry(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 1, blockType: 'text' } }),
+      entry(4, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 1, text: '开始回答' } }),
+    ] as HistoryEntry[]
+
+    expect(projectConversation(entries).messages[0]?.blocks).toEqual([
+      { kind: 'reasoning', text: '先分析' },
+      { kind: 'text', text: '开始回答', streaming: true },
+    ])
   })
 
   it('pairs slash-command lifecycle events into one visible result row', () => {

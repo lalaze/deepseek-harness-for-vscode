@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.4
+
+- 新增 Codex 风格的 `@文件` 能力：输入 `@` 后模糊检索工作区文件，选择后显示可移除、可点击的上下文卡片，并在发送时由扩展宿主安全读取文件内容。
+- VS Code 编辑器选区改为实时上下文卡片，不再把代码块直接插入输入框；选区正文仅保存在 Extension Host，并通过不透明 ID 附加到下一条消息。
+- 模型回复中的 Markdown 文件链接、行内代码路径和普通文本路径支持点击跳转，并可定位到 `path:line:column` 或 `path#Lline`；所有路径均限制在当前工作区。
+- 编辑器上下文、文件检索、模糊排序、`@` 候选菜单和文件引用解析按宿主服务、业务模型与 Webview 组件分层实现。
+
+- 将运行中的三点指示器改为 Claude 风格的顺序跳动：第一、第二、第三个点依次上跳回落，不再三个点同时闪烁。
+- 三点指示器抽为独立 ActivityIndicator 组件，并支持系统“减少动态效果”设置。
+
+- 推理过程改为 Claude Code 风格：reasoning block 开始时自动展开并逐帧平滑追加，收到 block-end 后自动收起，历史推理默认折叠但仍可手动查看。
+- 正文和推理流式输出使用独立 StreamingMessageComponent 原位更新，不再每 16ms 重建整段 Markdown DOM；大分片会分帧追赶并保持底部滚动稳定。
+
+- 修复插件市场没有显示 GitHub Topic 仓库的问题：市场现在直接读取 `topic:dsh-plugin` 搜索结果，而不再仅提供外部链接。
+- 将市场数据拆分为 GitHub Topic、精选目录和合并服务；任一来源不可用时自动降级到另一个来源，避免市场整页为空。
+- GitHub 仓库自动生成 `github:owner/repository` 安装参数，精选目录继续补充分类、中文介绍、npm 包名和固定版本命令。
+- 市场底部显示本次已加载数量和 GitHub Topic 仓库总数，卡片标明数据来自 GitHub Topic 或精选目录。
+- 新增 Agent、混合、仅官方 Web UI 和未知四类兼容性标识；纯主题/布局插件不会再被误导性地显示为原生工作台可用。
+- 插件中心业务抽出为独立 Controller，Webview Provider 只保留消息桥接，数据源、安装管理、运行时重启和 UI 组件各自分层。
+
+- 新增原生 DSH 插件中心，直接读取 `dsh-plugin` GitHub Topic，并合并精选目录的分类、翻译和安装元数据；支持筛选、搜索、已安装列表和自定义安装。
+- 插件安装与移除严格调用官方 `dsh plugin --profile web` 流程，并在配置变更期间安全停止和重启 Harness Gateway。
+- VSIX 内置 pnpm 及 Windows/POSIX 启动包装器，安装插件不再依赖用户预装 Node、npm、pnpm 或本地 Harness。
+- 支持 npm 包、GitHub spec、本地路径和 tarball URL；安装参数按单一安全参数校验，避免 Windows shell 转发发生参数注入。
+- 插件目录跟随 VS Code 语言显示英文或简体中文，并明确标注仅面向官方 DSH Web 客户端的 UI 扩展。
+- 增加第三方插件沙箱边界警告、源码确认弹窗、目录数据白名单投影和插件管理专项测试。
+
 ## 0.4.3
 
 - 新增 Claude Code 风格的输入框模型配置组件，模型、DSH 模式与推理等级会在发送下一条消息时统一生效。

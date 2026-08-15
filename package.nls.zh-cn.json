@@ -25,5 +25,5 @@
   "config.permission.readOnly": "禁止 Harness 工具写入文件。",
   "config.permission.workspaceWrite": "仅允许写入当前工作区及运行时临时目录。",
   "config.permission.dangerFullAccess": "不施加 Harness 文件沙箱限制。",
-  "config.autoAttachSelection": "发送消息时自动把当前编辑器选区附加为上下文。设为 `false` 后仅通过“⬒ 选区”按钮手动附加。"
+  "config.autoAttachSelection": "自动把当前编辑器选区暂存为可见的消息上下文卡片。设为 `false` 后仅通过“⬒ 选区”按钮手动附加。"
 }
