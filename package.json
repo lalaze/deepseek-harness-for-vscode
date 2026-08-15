@@ -209,5 +209,16 @@
     "markdown-it": "15.0.0",
     "node": "22.22.3",
     "ws": "^8.21.3"
+  },
+  "allowScripts": {
+    "node@22.22.3": true,
+    "@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6": true,
+    "esbuild@0.25.12": true,
+    "node-pty@1.1.0": true,
+    "koffi@3.1.4": true,
+    "keytar@7.9.0": true,
+    "protobufjs@7.6.5": true,
+    "@vscode/vsce-sign@2.0.9": true,
+    "@google/genai@1.52.0": true
   }
 }
