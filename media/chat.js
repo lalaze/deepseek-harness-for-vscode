@@ -3,6 +3,7 @@ import { createWebviewTranslator } from '../src/webview/localization.js'
 import { composerConfigurationInput } from '../src/webview/composer-configuration/adapter.js'
 import { createComposerConfigurationComponent } from '../src/webview/composer-configuration/component.js'
 import { composerStatusText } from '../src/webview/composer-status.js'
+import { createConnectionSettingsComponent } from '../src/webview/connection-settings/component.js'
 import { createContextMeterComponent } from '../src/webview/context-meter/component.js'
 import { createEditorContextComponent } from '../src/webview/editor-context/component.js'
 import { createFileMentionComponent } from '../src/webview/file-mention/component.js'
@@ -78,7 +79,19 @@ const composerConfiguration = createComposerConfigurationComponent({
   document,
   translate: t,
   onChange: () => renderComposer(payload?.state.active),
-  onOpen: closeCommandMenu,
+  onOpen: () => {
+    closeCommandMenu()
+    connectionSettings.close()
+  },
+})
+const connectionSettings = createConnectionSettingsComponent({
+  document,
+  translate: t,
+  post,
+  onOpen: () => {
+    composerConfiguration.close()
+    closeCommandMenu()
+  },
 })
 const contextMeter = createContextMeterComponent({ document, translate: t })
 const editorContext = createEditorContextComponent({
@@ -139,6 +152,10 @@ window.addEventListener('message', (event) => {
     fileMention.acceptSuggestions(event.data.requestId, event.data.query, event.data.files || [])
     return
   }
+  if (event.data?.type === 'connectionTestResult') {
+    connectionSettings.renderTestResult(event.data)
+    return
+  }
   if (event.data?.type !== 'state') return
   payload = event.data
   render()
@@ -174,7 +191,7 @@ elements.fork.addEventListener('click', () => {
   post('fork')
 })
 elements.setApiKey.addEventListener('click', () => post('setApiKey'))
-elements.openSettings.addEventListener('click', () => post('openSettings'))
+elements.openSettings.addEventListener('click', () => connectionSettings.open())
 elements.retry.addEventListener('click', () => post('retry'))
 elements.showLogs.addEventListener('click', () => post('showLogs'))
 elements.loadOlder.addEventListener('click', () => post('loadOlder'))
@@ -259,6 +276,11 @@ function render() {
   if (!elements.details.classList.contains('hidden')) renderDetails()
   renderComposer(active)
   updateCommandMenu()
+  connectionSettings.update(
+    payload.connectionSettings ?? { writable: false, providers: [] },
+    payload.configuration?.provider ?? 'deepseek-official',
+    active?.model?.provider,
+  )
 }
 
 function renderPhase(state) {
