@@ -1,6 +1,6 @@
 import type { PromptConfiguration } from '../../domain/prompt-configuration.js'
 import type { MessageArguments, WebviewMessageKey } from '../localization.js'
-import { ComposerConfigurationStore, modelsForSource } from './store.js'
+import { ComposerConfigurationStore } from './store.js'
 import type {
   ComposerConfigurationInput,
   ComposerConfigurationSnapshot,
@@ -154,7 +154,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.toggleModel.textContent = snapshot.model.label
     this.toggleMode.textContent = snapshot.preset.label
     this.toggle.title = t('configurationSummary', {
-      model: snapshot.model.label,
+      model: `${snapshot.model.providerName} · ${snapshot.model.label}`,
       mode: snapshot.preset.label,
       effort: snapshot.effort.label,
     })
@@ -184,14 +184,26 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
 
   private renderModels(snapshot: ComposerConfigurationSnapshot): void {
     const fragment = this.options.document.createDocumentFragment()
-    for (const model of modelsForSource(snapshot.input.models, snapshot.selection.provider)) {
-      const active = model.provider === snapshot.selection.provider && model.id === snapshot.selection.model
-      const button = this.optionButton(model, modelIcon(model.id), active)
-      button.addEventListener('click', () => {
-        this.render(this.store.selectModel(model.provider, model.id))
-        this.options.onChange()
-      })
-      fragment.append(button)
+    const groups = new Map<string, ModelConfigurationOption[]>()
+    for (const model of snapshot.input.models) {
+      const list = groups.get(model.provider)
+      if (list === undefined) groups.set(model.provider, [model])
+      else list.push(model)
+    }
+    for (const [provider, models] of groups) {
+      const header = this.options.document.createElement('div')
+      header.className = 'configuration-model-group-header'
+      header.textContent = models[0]?.providerName ?? provider
+      fragment.append(header)
+      for (const model of models) {
+        const active = model.provider === snapshot.selection.provider && model.id === snapshot.selection.model
+        const button = this.optionButton(model, modelIcon(model.id), active, model.providerName)
+        button.addEventListener('click', () => {
+          this.render(this.store.selectModel(model.provider, model.id))
+          this.options.onChange()
+        })
+        fragment.append(button)
+      }
     }
     this.models.replaceChildren(fragment)
   }
@@ -243,7 +255,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.effortTicks.replaceChildren(fragment)
   }
 
-  private optionButton(option: ConfigurationOption, icon: string, active: boolean): HTMLButtonElement {
+  private optionButton(option: ConfigurationOption, icon: string, active: boolean, providerName?: string): HTMLButtonElement {
     const document = this.options.document
     const button = document.createElement('button')
     button.type = 'button'
@@ -255,6 +267,12 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     const label = document.createElement('strong')
     label.textContent = option.label
     copy.append(label)
+    if (providerName !== undefined && providerName !== '') {
+      const provider = document.createElement('small')
+      provider.className = 'configuration-option-provider'
+      provider.textContent = providerName
+      copy.append(provider)
+    }
     if (option.description !== undefined && option.description !== '') {
       const description = document.createElement('small')
       description.textContent = option.description

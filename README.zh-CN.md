@@ -4,11 +4,11 @@
 
 在 VS Code 中原生运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 AI 编码助手扩展。无需克隆上游仓库、安装 Node/npm 或手动部署 Harness；安装匹配平台的 VSIX 即可使用。
 
-> 当前为社区开发版本 `0.4.4`。DeepSeek Harness 仍处于 Developer Preview，本扩展固定使用官方 npm 包 `@deepseek-ai/dsh@0.1.0-rc.6`。
+> 当前为社区开发版本 `0.4.5`。DeepSeek Harness 仍处于 Developer Preview，本扩展固定使用官方 npm 包 `@deepseek-ai/dsh@0.1.0-rc.6`。
 
 ## 功能
 
-- **原生 VS Code 工作台**：全部交互都在侧边栏完成，不嵌套官方 WebUI。
+- **原生 VS Code 工作台**：全部交互都在侧边栏完成；本地 Harness Gateway 在后台运行，原生工作台不嵌入官方 WebUI。
 - **完整会话管理**：持久化历史、新建、切换、重命名和分支会话。
 - **Markdown 流式回复**：支持标题、列表、表格、代码块、一键复制、安全外链及可点击跳转的工作区文件引用。
 - **稳定增量渲染**：流式更新保留推理/工具卡展开状态和用户滚动位置。

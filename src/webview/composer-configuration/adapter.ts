@@ -26,31 +26,44 @@ export function composerConfigurationInput(
   const active = payload.state.active
   if (active === undefined) return undefined
   const fallbackReasoning = payload.fallbackOptions.reasoning.map(copyOption)
-  const sources = payload.fallbackOptions.sources.map(copyOption)
-  // Provider and model are independent UI dimensions. Materialize only the
-  // extension-owned Flash/Pro pair for each provider saved in settings.
-  const models: readonly ModelConfigurationOption[] = sources.flatMap((source) => (
-    payload.fallbackOptions.models.map((fallbackModel) => {
-      const live = active.models.find((model) => model.provider === source.id && model.id === fallbackModel.id)
-      return {
-        provider: source.id,
-        id: fallbackModel.id,
-        label: fallbackModel.label,
-        ...(fallbackModel.description === undefined ? {} : { description: fallbackModel.description }),
-        reasoning: live === undefined || live.reasoning.length === 0
-          ? fallbackReasoning
-          : live.reasoning.map((effort) => {
-            const fallback = fallbackReasoning.find((option) => option.id === effort.id)
-            const description = effort.description ?? fallback?.description
-            return {
-              id: effort.id,
-              label: fallback?.label ?? effort.name,
-              ...(description === undefined ? {} : { description }),
-            }
-          }),
-      }
-    })
-  ))
+  const fallbackSources = payload.fallbackOptions.sources.map(copyOption)
+  const liveSources = active.models.map((model) => ({ id: model.provider, label: model.providerName }))
+  const sourceMap = new Map<string, ConfigurationOption>()
+  for (const source of fallbackSources) sourceMap.set(source.id, source)
+  for (const source of liveSources) {
+    if (!sourceMap.has(source.id)) sourceMap.set(source.id, { id: source.id, label: source.label })
+  }
+  const sources = [...sourceMap.values()]
+  // Prefer the live Harness catalog so models from every configured or
+  // plugin-provided provider appear automatically. While the catalog is still
+  // loading, fall back to the configured sources with the Flash/Pro pair.
+  const models: ModelConfigurationOption[] = active.models.length > 0
+    ? active.models.map((model) => ({
+      provider: model.provider,
+      providerName: model.providerName,
+      id: model.id,
+      label: model.name,
+      ...(model.description === undefined ? {} : { description: model.description }),
+      reasoning: model.reasoning.length === 0
+        ? fallbackReasoning
+        : model.reasoning.map((effort) => {
+          const fallback = fallbackReasoning.find((option) => option.id === effort.id)
+          const description = effort.description ?? fallback?.description
+          return {
+            id: effort.id,
+            label: fallback?.label ?? effort.name,
+            ...(description === undefined ? {} : { description }),
+          }
+        }),
+    }))
+    : sources.flatMap((source) => payload.fallbackOptions.models.map((fallbackModel) => ({
+      provider: source.id,
+      providerName: source.label,
+      id: fallbackModel.id,
+      label: fallbackModel.label,
+      ...(fallbackModel.description === undefined ? {} : { description: fallbackModel.description }),
+      reasoning: fallbackReasoning,
+    })))
   const presets: readonly ConfigurationOption[] = payload.state.presets.length > 0
     ? payload.state.presets.filter((preset) => !preset.broken).map((preset) => ({
       id: preset.id,

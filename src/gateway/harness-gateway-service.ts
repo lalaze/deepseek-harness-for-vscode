@@ -170,6 +170,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       ...(this.models === undefined ? {} : { model: this.models.current }),
       models: this.models?.groups.flatMap((group) => group.models.map((model) => ({
         provider: group.id,
+        providerName: group.name,
         id: model.id,
         name: model.name,
         ...(model.description === undefined ? {} : { description: model.description }),
@@ -401,6 +402,9 @@ export class HarnessGatewayService implements vscode.Disposable {
       }))
     } else {
       if (this.subagentAddress.mode === 'one-shot') throw new Error(vscode.l10n.t('One-shot sub-agent history is read-only.'))
+      if (content.some((part) => part.type === 'image')) {
+        throw new Error(vscode.l10n.t('Image attachments are not supported in sub-agent conversations.'))
+      }
       valueOf(await this.requireClient().subagents.prompt({
         ...this.subagentAddress,
         content: content.flatMap((part) => part.type === 'text' ? [{ type: 'text' as const, text: part.text }] : []),
@@ -858,6 +862,14 @@ export class HarnessGatewayService implements vscode.Disposable {
 }
 
 function attachmentPart(attachment: PromptAttachment): PromptContentPart {
+  if (attachment.kind === 'image') {
+    return {
+      type: 'image',
+      mediaType: attachment.mediaType,
+      data: attachment.data,
+      ...(attachment.name === undefined ? {} : { name: attachment.name }),
+    }
+  }
   const name = attachment.file === undefined
     ? vscode.l10n.t('Selection')
     : attachment.file

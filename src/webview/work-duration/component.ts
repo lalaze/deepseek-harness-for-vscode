@@ -1,12 +1,17 @@
 import type { TurnDurationView } from '../../domain/turn-duration.js'
+import { createSequentialActivityDots } from '../activity-indicator/component.js'
 import type { MessageArguments, WebviewMessageKey } from '../localization.js'
 import { formatWorkDuration } from './format.js'
 
 type Translator = (key: WebviewMessageKey, args?: MessageArguments) => string
 
 export interface WorkDurationComponent {
-  /** Adds, updates, or removes the duration footer owned by a chat item. */
-  update(container: HTMLElement, duration: TurnDurationView | undefined): void
+  /**
+   * Adds, updates, or removes the duration footer owned by a chat item.
+   * When `pending` is true and no duration is available yet, a three-dot
+   * transition indicator is shown in the footer position instead.
+   */
+  update(container: HTMLElement, duration: TurnDurationView | undefined, pending?: boolean): void
 }
 
 /**
@@ -47,11 +52,21 @@ export function createWorkDurationComponent(options: {
   }
 
   return {
-    update(container, duration) {
+    update(container, duration, pending = false) {
       const current = Array.from(container.children).find((child) => child.classList.contains('work-duration'))
       const element = current instanceof HTMLElement ? current : undefined
 
       if (duration === undefined) {
+        if (pending) {
+          const footer = element ?? options.document.createElement('div')
+          if (element === undefined) {
+            footer.className = 'work-duration pending'
+            container.append(footer)
+          }
+          footer.classList.add('pending')
+          footer.replaceChildren(createSequentialActivityDots(options.document))
+          return
+        }
         if (element !== undefined) {
           running.delete(element)
           element.remove()
@@ -64,6 +79,8 @@ export function createWorkDurationComponent(options: {
       if (element === undefined) {
         footer.className = 'work-duration'
         container.append(footer)
+      } else {
+        footer.classList.remove('pending')
       }
       refresh(footer, duration)
       if (duration.endedAt === undefined) {

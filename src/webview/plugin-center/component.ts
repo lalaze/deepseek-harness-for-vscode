@@ -163,10 +163,13 @@ export function createPluginCenterComponent(options: {
     const description = element('p', 'plugin-description', plugin.description)
     const meta = element('div', 'plugin-card-meta')
     meta.append(element('span', 'plugin-category-badge', categoryLabel(plugin.category)))
-    if (plugin.npmPackage !== undefined) meta.append(element('span', 'plugin-source-badge', 'npm'))
+    if (plugin.installKind === 'managed-suite') meta.append(element('span', 'plugin-source-badge', options.translate('pluginSuite')))
+    else if (plugin.npmPackage !== undefined) meta.append(element('span', 'plugin-source-badge', 'npm'))
     else meta.append(element('span', 'plugin-source-badge', 'GitHub'))
     meta.append(element('span', 'plugin-source-badge', options.translate(
-      plugin.catalogSource === 'github-topic' ? 'githubTopicSource' : 'curatedSource',
+      plugin.catalogSource === 'github-topic'
+        ? 'githubTopicSource'
+        : plugin.catalogSource === 'builtin' ? 'builtinSource' : 'curatedSource',
     )))
     meta.append(element('span', `plugin-compatibility-badge compatibility-${plugin.compatibility}`, compatibilityLabel(plugin)))
     const actions = element('div', 'plugin-card-actions')
@@ -247,7 +250,8 @@ export function createPluginCenterComponent(options: {
 }
 
 function isInstalled(plugin: DshPluginCatalogItem, installed: readonly InstalledDshPlugin[]): boolean {
-  return installed.some((item) => item.name === plugin.npmPackage
+  return installed.some((item) => item.name === plugin.installedName
+    || item.name === plugin.npmPackage
     || item.name === plugin.name
     || item.source.includes(plugin.installSpec)
     || item.repositoryUrl?.toLowerCase() === plugin.repositoryUrl.toLowerCase())

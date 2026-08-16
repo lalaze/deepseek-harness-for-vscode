@@ -34,6 +34,20 @@ describe('projectConversation', () => {
     expect(result.todos).toEqual([{ content: '运行测试', status: 'in_progress' }])
   })
 
+  it('marks the tool call card completed when its result arrives', () => {
+    const entries = [
+      entry(0, 'tool/call', { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{"command":"ls"}' }),
+      entry(1, 'tool/result', {
+        turn: 1, step: 1, error: undefined,
+        message: { id: 'r1', role: 'tool', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'text', text: 'done' }] },
+      }),
+    ] as HistoryEntry[]
+
+    const messages = projectConversation(entries).messages
+    expect(messages[0]).toMatchObject({ id: 'tool-c1-call', status: 'success' })
+    expect(messages[1]).toMatchObject({ id: 'tool-c1-result', status: 'success' })
+  })
+
   it('shows streamed chunks only until their finalized assistant message exists', () => {
     const partial = [
       entry(0, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } }),

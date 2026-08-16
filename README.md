@@ -4,11 +4,11 @@
 
 A native VS Code coding-agent extension powered by [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Install the platform-specific VSIX and start working—there is no upstream repository to clone, no Node/npm setup, and no local Harness deployment to manage.
 
-> This is a community-maintained `0.4.4` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
+> This is a community-maintained `0.4.5` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
 
 ## Features
 
-- **Native VS Code workbench** — all interaction happens in the sidebar; the official WebUI is never embedded.
+- **Native VS Code workbench** — all interaction happens in the sidebar; the local Harness Gateway runs in the background and the native workbench does not embed the official WebUI.
 - **Complete session workflow** — persistent history, create, switch, rename, fork, and resume sessions.
 - **Streaming Markdown** — headings, lists, tables, code blocks, copy controls, safe external links, and clickable workspace file references.
 - **Stable incremental rendering** — streamed updates preserve disclosure state and the reader's scroll position.

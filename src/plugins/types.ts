@@ -12,17 +12,20 @@ export interface DshPluginCatalogItem {
   readonly repositoryUrl: string
   readonly detailsUrl?: string
   readonly installSpec: string
+  /** Installed-list identity for recipes that manage more than one artifact. */
+  readonly installedName?: string
+  readonly installKind?: 'package' | 'managed-suite'
   readonly npmPackage?: string
   readonly stars: number
   readonly added?: string
   readonly updatedAt?: string
-  readonly catalogSource: 'github-topic' | 'curated' | 'both'
+  readonly catalogSource: 'github-topic' | 'curated' | 'builtin' | 'both'
   /** Best-effort compatibility derived from validated catalog metadata. */
   readonly compatibility: 'agent' | 'partial' | 'official-web-ui' | 'unknown'
 }
 
 export interface DshPluginCatalogSnapshot {
-  readonly source: 'github-topic+awesome-dsh-plugin'
+  readonly source: 'builtin+github-topic+awesome-dsh-plugin'
   readonly sourceUrl: string
   readonly topicUrl: string
   readonly curatedSourceUrl: string
@@ -35,7 +38,7 @@ export interface DshPluginCatalogSnapshot {
 
 /** Validated contribution produced by one remote catalog adapter. */
 export interface DshPluginCatalogContribution {
-  readonly source: 'github-topic' | 'curated'
+  readonly source: 'github-topic' | 'curated' | 'builtin'
   readonly categories: readonly DshPluginCategory[]
   readonly plugins: readonly DshPluginCatalogItem[]
   readonly totalAvailable?: number

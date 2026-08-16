@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { BuiltinDshPluginSource } from '../src/plugins/builtin-plugin-source.js'
 import { CuratedDshPluginSource, projectPluginRegistry } from '../src/plugins/curated-plugin-source.js'
 import { GitHubDshPluginTopicSource, projectGitHubTopicResponse } from '../src/plugins/github-topic-source.js'
 import { DshPluginCatalogService, mergePluginCatalog } from '../src/plugins/plugin-catalog.js'
@@ -97,6 +98,66 @@ describe('DSH plugin catalog sources', () => {
     })
   })
 
+  it('exposes built-in plugins and the non-package routing suite through a trusted recipe', async () => {
+    const contribution = await new BuiltinDshPluginSource().load('zh-cn')
+
+    expect(contribution.source).toBe('builtin')
+    expect(contribution.categories).toEqual([
+      { id: 'routing', label: '路由与工作流' },
+      { id: 'vision', label: '视觉' },
+    ])
+    expect(contribution.plugins[0]).toMatchObject({
+      name: 'DSH Routing Suite',
+      installSpec: 'builtin:dsh-routing-suite@0.3.3',
+      installedName: 'dsh-routing-suite',
+      installKind: 'managed-suite',
+      catalogSource: 'builtin',
+      compatibility: 'agent',
+    })
+    expect(contribution.plugins.map((plugin) => plugin.name)).toEqual([
+      'DSH Routing Suite',
+      'DSH Vision Router',
+      'DSH Super Injector',
+    ])
+    expect(contribution.plugins[1]).toMatchObject({
+      name: 'DSH Vision Router',
+      installSpec: 'dsh-vision-router',
+      npmPackage: 'dsh-vision-router',
+      installedName: 'dsh-vision-router',
+      installKind: 'package',
+      catalogSource: 'builtin',
+      compatibility: 'agent',
+    })
+    expect(contribution.plugins[2]).toMatchObject({
+      name: 'DSH Super Injector',
+      installedName: '@dsh-external/dsh-super-injector',
+      installKind: 'package',
+      catalogSource: 'builtin',
+      compatibility: 'agent',
+    })
+  })
+
+  it('prefers the managed recipe over an invalid same-repository GitHub package spec', async () => {
+    const github = projectGitHubTopicResponse({
+      total_count: 1,
+      items: [{
+        full_name: 'yjh051108/dsh-routing-suite',
+        html_url: 'https://github.com/yjh051108/dsh-routing-suite',
+        description: 'Suite root', stargazers_count: 2300, updated_at: '2026-08-16T00:00:00Z',
+        archived: false, fork: false,
+      }],
+    }, 'en')
+    const builtin = await new BuiltinDshPluginSource().load('en')
+
+    const [plugin] = mergePluginCatalog([github, builtin]).plugins
+    expect(plugin).toMatchObject({
+      installSpec: 'builtin:dsh-routing-suite@0.3.3',
+      installKind: 'managed-suite',
+      stars: 2300,
+      catalogSource: 'builtin',
+    })
+  })
+
   it('merges duplicate repositories while preserving curated install metadata', () => {
     const catalog = mergePluginCatalog([
       projectGitHubTopicResponse(githubSearch, 'zh-cn'),
@@ -118,7 +179,10 @@ describe('DSH plugin catalog sources', () => {
     const service = new DshPluginCatalogService(workingSource, failingSource)
 
     const catalog = await service.load('en')
-    expect(catalog.plugins).toHaveLength(2)
+    expect(catalog.plugins).toHaveLength(5)
+    expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Routing Suite')).toBe(true)
+    expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Vision Router')).toBe(true)
+    expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Super Injector')).toBe(true)
     expect(catalog.topicRepositoryCount).toBe(3016)
   })
 
@@ -137,7 +201,7 @@ describe('DSH plugin catalog sources', () => {
 
   it('fails only when every marketplace source fails', async () => {
     const failing = { load: vi.fn(async (): Promise<DshPluginCatalogContribution> => { throw new Error('offline') }) }
-    await expect(new DshPluginCatalogService(failing, failing).load('en')).rejects.toThrow('Could not load')
+    await expect(new DshPluginCatalogService(failing, failing, failing).load('en')).rejects.toThrow('Could not load')
   })
 })
 

@@ -1,5 +1,8 @@
+/** Raster image formats accepted by the Harness prompt wire. */
+export type PromptImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+
 /** Text context that is prepended to a Harness prompt. */
-export interface PromptAttachment {
+export interface TextPromptAttachment {
   readonly kind: 'selection' | 'file'
   readonly file?: string
   readonly text: string
@@ -7,3 +10,13 @@ export interface PromptAttachment {
   readonly endLine?: number
   readonly tooLong?: boolean
 }
+
+/** Browser-submitted image bytes (base64) attached to a Harness prompt. */
+export interface ImagePromptAttachment {
+  readonly kind: 'image'
+  readonly mediaType: PromptImageMediaType
+  readonly data: string
+  readonly name?: string
+}
+
+export type PromptAttachment = TextPromptAttachment | ImagePromptAttachment

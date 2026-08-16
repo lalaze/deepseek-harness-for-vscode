@@ -8,6 +8,7 @@ export interface ConfigurationOption {
 
 export interface ModelConfigurationOption extends ConfigurationOption {
   readonly provider: string
+  readonly providerName: string
   readonly reasoning: readonly ConfigurationOption[]
 }
 

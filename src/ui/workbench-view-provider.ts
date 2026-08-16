@@ -10,6 +10,7 @@ import type { WorkspaceFileService } from '../editor/workspace-file-service.js'
 import type { HarnessGatewayService } from '../gateway/harness-gateway-service.js'
 import type { DshPluginCenterController } from '../plugins/plugin-center-controller.js'
 import type { ConnectionSettingsService } from '../services/connection-settings-service.js'
+import type { PromptAttachment, PromptImageMediaType } from '../domain/prompt-context.js'
 import { localizeWebviewMessages, type WebviewMessageKey } from '../webview/localization.js'
 
 export interface WorkbenchViewActions {
@@ -193,10 +194,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           : context?.selectionId
         const selection = this.editorSelection.attachment(selectionId)
         const files = await this.workspaceFiles.attachments(context?.fileIds ?? [])
+        const images = promptImageAttachments(value.images)
         await this.gateway.prompt(
           text,
           value.mode === 'steer' ? 'steer' : 'queue',
-          [...(selection === undefined ? [] : [selection]), ...files],
+          [...(selection === undefined ? [] : [selection]), ...files, ...images],
         )
         break
       }
@@ -301,7 +303,35 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <style nonce="${nonce}">
+    .hidden { display: none !important; }
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 30px 20px;
+      text-align: center;
+      color: var(--vscode-descriptionForeground, #9d9d9d);
+      background: var(--vscode-editor-background, #1e1e1e);
+    }
+    #loading.hidden { display: none !important; }
+    .startup-logo { width: 56px; height: 56px; object-fit: contain; opacity: .92; animation: startup-float 2.2s ease-in-out infinite; }
+    .startup-dots { height: 18px; margin-top: 10px; display: flex; align-items: center; gap: 5px; }
+    .startup-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--vscode-progressBar-background, #0e639c); animation: startup-dot 1.1s ease-in-out infinite; }
+    .startup-dots span:nth-child(2) { animation-delay: 140ms; }
+    .startup-dots span:nth-child(3) { animation-delay: 280ms; }
+    @keyframes startup-float { 50% { transform: translateY(-4px); } }
+    @keyframes startup-dot {
+      0%, 60%, 100% { transform: translateY(0); opacity: .5; }
+      30% { transform: translateY(-6px); opacity: 1; }
+    }
+  </style>
   <link rel="stylesheet" href="${style}">
   <title>DeepSeek Harness</title>
 </head>
@@ -371,8 +401,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
   </aside>
 
   <main id="workbench" class="workbench">
-    <section id="loading" class="center-state">
-      <div class="spinner"></div><h2>${text('startingHarness')}</h2><p>${text('startingHarnessDescription')}</p>
+    <section id="loading" class="center-state startup-screen">
+      <img class="startup-logo" src="${logo}" alt="">
+      <div class="startup-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <h2>${text('startingHarness')}</h2>
+      <p>${text('startingHarnessDescription')}</p>
     </section>
     <section id="error" class="center-state hidden">
       <div class="error-icon">!</div><h2>${text('connectionFailed')}</h2><p id="error-message"></p>
@@ -394,6 +427,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           <button data-detail="skills">${text('skills')} <span id="skill-count">0</span></button>
           <button data-detail="agents">${text('agents')} <span id="agent-count">0</span></button>
           <button data-detail="jobs">${text('jobs')} <span id="job-count">0</span></button>
+          <button data-detail="timeline">${text('timeline')}</button>
         </div>
         <div id="detail-content" class="detail-content"></div>
       </section>
@@ -431,12 +465,15 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           </footer>
         </section>
         <div id="editor-context-list" class="editor-context-list hidden" aria-label="${text('attachedContext')}"></div>
+        <div id="image-preview-list" class="image-preview-list hidden" aria-label="${text('imageAttachments')}"></div>
+        <div id="timeline-panel" class="timeline-panel hidden" role="listbox" aria-label="${text('timeline')}"></div>
         <div id="file-mention-menu" class="file-mention-menu hidden" role="listbox" aria-label="${text('workspaceFiles')}"></div>
         <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="${text('slashCommands')}"></div>
         <textarea id="prompt" rows="1" placeholder="${text('promptPlaceholder')}" aria-label="${text('message')}"></textarea>
         <div class="composer-bar">
           <div class="composer-tools">
             <button id="attach-selection" class="text-button" title="${text('attachSelection')}">⬒ ${text('selection')}</button>
+            <button id="timeline-toggle" class="text-button" title="${text('timeline')}">◷ ${text('timeline')}</button>
             <button id="details-toggle" class="text-button" title="${text('contextDescription')}">${text('context')}</button>
             <select id="permission" class="permission-select hidden" title="${text('permissionDescription')}"></select>
           </div>
@@ -463,7 +500,6 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <p class="composer-hint">${text('composerHint')}</p>
     </section>
   </main>
-
   <section id="settings-panel" class="settings-panel hidden" role="dialog" aria-label="${text('connectionSettings')}">
     <div class="settings-card">
       <header class="settings-header">
@@ -502,6 +538,14 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     </div>
   </section>
 
+  <div id="image-lightbox" class="image-lightbox hidden" role="dialog" aria-modal="true" aria-label="${text('imagePreview')}">
+    <div class="image-lightbox-backdrop"></div>
+    <figure class="image-lightbox-content">
+      <img id="image-lightbox-image" alt="">
+      <figcaption id="image-lightbox-name"></figcaption>
+      <button id="image-lightbox-close" class="image-lightbox-close" type="button" title="${text('closeImagePreview')}" aria-label="${text('closeImagePreview')}">×</button>
+    </figure>
+  </div>
   <script nonce="${nonce}">globalThis.__DEEPSEEK_HARNESS_LOCALIZATION__=${localization};</script>
   <script nonce="${nonce}" src="${script}"></script>
 </body>
@@ -570,6 +614,35 @@ function promptContextInput(value: unknown): { readonly selectionId?: string; re
     ? [...new Set(value.fileIds.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 8)
     : []
   return { ...(selectionId === undefined ? {} : { selectionId }), fileIds }
+}
+
+const PROMPT_IMAGE_MEDIA_TYPES: readonly PromptImageMediaType[] = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+
+function promptImageAttachments(value: unknown): PromptAttachment[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new Error(vscode.l10n.t('Invalid image attachment format.'))
+  const images: PromptAttachment[] = []
+  for (const item of value) {
+    if (!isRecord(item)) throw new Error(vscode.l10n.t('Invalid image attachment format.'))
+    const mediaType = item.mediaType
+    const data = item.data
+    const name = optionalString(item.name)
+    if (
+      typeof mediaType !== 'string'
+      || !PROMPT_IMAGE_MEDIA_TYPES.includes(mediaType as PromptImageMediaType)
+      || typeof data !== 'string'
+      || data === ''
+    ) {
+      throw new Error(vscode.l10n.t('Invalid image attachment format.'))
+    }
+    images.push({
+      kind: 'image',
+      mediaType: mediaType as PromptImageMediaType,
+      data,
+      ...(name === undefined ? {} : { name }),
+    })
+  }
+  return images
 }
 
 function openFileRequest(value: Record<string, unknown>): OpenWorkspaceFileRequest {

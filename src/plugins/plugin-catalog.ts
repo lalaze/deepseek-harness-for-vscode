@@ -1,3 +1,4 @@
+import { BuiltinDshPluginSource } from './builtin-plugin-source.js'
 import { CuratedDshPluginSource, projectPluginRegistry } from './curated-plugin-source.js'
 import { GitHubDshPluginTopicSource } from './github-topic-source.js'
 import type { DshPluginCatalogContribution, DshPluginCatalogItem, DshPluginCatalogSnapshot } from './types.js'
@@ -9,17 +10,19 @@ export interface DshPluginSource {
   load(language: string, force?: boolean): Promise<DshPluginCatalogContribution>
 }
 
-/** Combines the real GitHub Topic with curated translations and install metadata. */
+/** Combines remote catalogs with trusted recipes for non-package suites. */
 export class DshPluginCatalogService {
   constructor(
     private readonly githubTopic: DshPluginSource = new GitHubDshPluginTopicSource(),
     private readonly curated: DshPluginSource = new CuratedDshPluginSource(),
+    private readonly builtin: DshPluginSource = new BuiltinDshPluginSource(),
   ) {}
 
   async load(language: string, force = false): Promise<DshPluginCatalogSnapshot> {
     const results = await Promise.allSettled([
       this.githubTopic.load(language, force),
       this.curated.load(language, force),
+      this.builtin.load(language, force),
     ])
     const contributions = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
     if (contributions.length === 0) {
@@ -30,10 +33,11 @@ export class DshPluginCatalogService {
   }
 }
 
-/** Deterministically merges the two independently validated remote sources. */
+/** Deterministically merges independently validated remote and built-in sources. */
 export function mergePluginCatalog(contributions: readonly DshPluginCatalogContribution[]): DshPluginCatalogSnapshot {
   const topic = contributions.find((item) => item.source === 'github-topic')
   const curated = contributions.find((item) => item.source === 'curated')
+  const builtin = contributions.find((item) => item.source === 'builtin')
   const plugins = new Map<string, DshPluginCatalogItem>()
   for (const plugin of topic?.plugins ?? []) plugins.set(plugin.id, plugin)
   for (const plugin of curated?.plugins ?? []) {
@@ -46,6 +50,18 @@ export function mergePluginCatalog(contributions: readonly DshPluginCatalogContr
       catalogSource: 'both',
     })
   }
+  // Built-in recipes must win over a same-repository GitHub card because the
+  // repository root is not necessarily an installable npm package.
+  for (const plugin of builtin?.plugins ?? []) {
+    const existing = plugins.get(plugin.id)
+    plugins.set(plugin.id, existing === undefined ? plugin : {
+      ...existing,
+      ...plugin,
+      stars: Math.max(existing.stars, plugin.stars),
+      ...(existing.updatedAt === undefined ? {} : { updatedAt: existing.updatedAt }),
+      catalogSource: 'builtin',
+    })
+  }
   const merged = [...plugins.values()].sort((left, right) => {
     const recency = (right.updatedAt ?? '').localeCompare(left.updatedAt ?? '')
     return recency !== 0 ? recency : right.stars - left.stars || left.name.localeCompare(right.name)
@@ -54,9 +70,9 @@ export function mergePluginCatalog(contributions: readonly DshPluginCatalogContr
   for (const contribution of contributions) {
     for (const category of contribution.categories) categories.set(category.id, category.label)
   }
-  const updated = [topic?.updated, curated?.updated].filter((item): item is string => item !== undefined).sort().at(-1)
+  const updated = [topic?.updated, curated?.updated, builtin?.updated].filter((item): item is string => item !== undefined).sort().at(-1)
   return {
-    source: 'github-topic+awesome-dsh-plugin',
+    source: 'builtin+github-topic+awesome-dsh-plugin',
     sourceUrl: TOPIC_URL,
     topicUrl: TOPIC_URL,
     curatedSourceUrl: REGISTRY_PAGE,

@@ -50,6 +50,13 @@ const elements = {
   agentCount: byId('agent-count'),
   interactions: byId('interactions'),
   prompt: byId('prompt'),
+  imagePreviewList: byId('image-preview-list'),
+  timelineToggle: byId('timeline-toggle'),
+  timelinePanel: byId('timeline-panel'),
+  imageLightbox: byId('image-lightbox'),
+  imageLightboxImage: byId('image-lightbox-image'),
+  imageLightboxName: byId('image-lightbox-name'),
+  imageLightboxClose: byId('image-lightbox-close'),
   commandMenu: byId('command-menu'),
   attachSelection: byId('attach-selection'),
   send: byId('send'),
@@ -59,6 +66,8 @@ const elements = {
 let payload
 let currentDetail = 'todos'
 let renderedSessionId = ''
+let pastedImages = []
+let startupComplete = false
 const messageSignatures = new WeakMap()
 let searchResults = []
 let searchTimer
@@ -178,16 +187,22 @@ elements.historySearch.addEventListener('input', () => {
 elements.newSession.addEventListener('click', () => {
   composerConfiguration.reset()
   fileMention.close()
+  closeTimeline()
   editorContext.markSubmitted()
+  clearPastedImages()
   post('newSession')
 })
 elements.sessionTitle.addEventListener('click', () => post('rename'))
 elements.backParent.addEventListener('click', () => {
   composerConfiguration.reset()
+  closeTimeline()
+  clearPastedImages()
   post('selectParent')
 })
 elements.fork.addEventListener('click', () => {
   composerConfiguration.reset()
+  closeTimeline()
+  clearPastedImages()
   post('fork')
 })
 elements.setApiKey.addEventListener('click', () => post('setApiKey'))
@@ -249,7 +264,55 @@ elements.prompt.addEventListener('keydown', (event) => {
 elements.prompt.addEventListener('blur', () => {
   setTimeout(() => { if (!elements.commandMenu.matches(':hover')) closeCommandMenu() }, 120)
 })
+document.addEventListener('paste', (event) => {
+  const target = event.target
+  if (!elements.prompt.parentElement?.contains(target)) return
+  const clipboardData = event.clipboardData
+  if (!clipboardData) return
+  const itemFiles = clipboardData.items === undefined
+    ? []
+    : [...clipboardData.items]
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file) => file !== undefined && file !== null)
+  const directFiles = clipboardData.files === undefined
+    ? []
+    : [...clipboardData.files].filter((file) => file.type.startsWith('image/'))
+  const files = [...new Map([...itemFiles, ...directFiles].map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file])).values()]
+  if (files.length === 0) return
+  event.preventDefault()
+  void addPastedImages(files)
+})
+elements.imageLightboxClose.addEventListener('click', () => closeImagePreview())
+elements.imageLightbox.querySelector('.image-lightbox-backdrop')?.addEventListener('click', () => closeImagePreview())
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return
+  if (!elements.imageLightbox.classList.contains('hidden')) {
+    event.preventDefault()
+    closeImagePreview()
+    return
+  }
+  if (!elements.timelinePanel.classList.contains('hidden')) {
+    event.preventDefault()
+    closeTimeline()
+  }
+})
 elements.permission.addEventListener('change', () => post('setPermission', { value: elements.permission.value }))
+elements.timelineToggle.addEventListener('click', (event) => {
+  event.stopPropagation()
+  if (elements.timelinePanel.classList.contains('hidden')) openTimeline()
+  else closeTimeline()
+})
+document.addEventListener('pointerdown', (event) => {
+  const target = event.target
+  if (
+    !elements.timelinePanel.classList.contains('hidden')
+    && !elements.timelinePanel.contains(target)
+    && !elements.timelineToggle.contains(target)
+  ) {
+    closeTimeline()
+  }
+})
 for (const tab of document.querySelectorAll('[data-detail]')) {
   tab.addEventListener('click', () => {
     currentDetail = tab.dataset.detail
@@ -281,6 +344,12 @@ function render() {
     payload.configuration?.provider ?? 'deepseek-official',
     active?.model?.provider,
   )
+  if (!elements.timelinePanel.classList.contains('hidden')) renderTimelinePanel()
+  if (!startupComplete && state.phase === 'connected') {
+    startupComplete = true
+    renderPhase(state)
+    scrollConversationToBottom()
+  }
 }
 
 function renderPhase(state) {
@@ -288,7 +357,7 @@ function renderPhase(state) {
   elements.connection.className = `connection ${phase}`
   elements.connection.textContent = phase === 'connected' ? t('connected') : phase === 'reconnecting' ? t('reconnecting') : phase === 'error' ? t('connectionError') : t('starting')
   const failed = phase === 'error'
-  const loading = phase === 'idle' || phase === 'starting'
+  const loading = !startupComplete && phase !== 'error'
   elements.loading.classList.toggle('hidden', !loading)
   elements.error.classList.toggle('hidden', !failed)
   elements.chat.classList.toggle('hidden', loading || failed)
@@ -314,6 +383,8 @@ function renderSessions() {
     if (snippet) button.append(node('span', 'session-snippet', snippet))
     button.addEventListener('click', () => {
       composerConfiguration.reset()
+      closeTimeline()
+      clearPastedImages()
       post('selectSession', { sessionId: session.id })
       toggleHistory(false)
     })
@@ -372,6 +443,7 @@ function renderMessages(active) {
   const previousTop = elements.conversation.scrollTop
   const previousHeight = elements.conversation.scrollHeight
   const previousFirstId = elements.messages.firstElementChild?.dataset.messageId
+  const conclusionId = latestConclusionId(messages)
   const existing = new Map([...elements.messages.children].map((element) => [element.dataset.messageId, element]))
   const retained = new Set()
   let cursor = elements.messages.firstElementChild
@@ -381,7 +453,7 @@ function renderMessages(active) {
     const signature = messageSignature(item)
     let element = existing.get(id)
     if (!element) {
-      element = renderMessage(item)
+      element = renderMessage(item, conclusionId)
       setMessageMetadata(element, id, signature)
     } else if (messageSignatures.get(element) !== signature) {
       if (patchStreamingMessage(element, item)) {
@@ -389,7 +461,7 @@ function renderMessages(active) {
       } else {
         const wasCursor = element === cursor
         const disclosureState = captureDisclosures(element)
-        const replacement = renderMessage(item)
+        const replacement = renderMessage(item, conclusionId)
         restoreDisclosures(replacement, disclosureState)
         setMessageMetadata(replacement, id, signature)
         element.replaceWith(replacement)
@@ -405,11 +477,15 @@ function renderMessages(active) {
   for (const [id, element] of existing) {
     if (!retained.has(id)) element.remove()
   }
+  for (const footer of elements.messages.querySelectorAll('.message-copy-footer')) {
+    const article = footer.closest('article')
+    if (article?.dataset.messageId !== conclusionId) footer.remove()
+  }
   elements.empty.classList.toggle('hidden', messages.length > 0)
   const prepended = !sessionChanged && previousFirstId !== undefined
     && messages.findIndex((item) => String(item.id) === previousFirstId) > 0
   if (shouldStick) {
-    elements.conversation.scrollTop = elements.conversation.scrollHeight
+    scrollConversationToBottom()
   } else if (prepended) {
     elements.conversation.scrollTop = previousTop + elements.conversation.scrollHeight - previousHeight
   } else {
@@ -419,14 +495,52 @@ function renderMessages(active) {
   renderedSessionId = sessionId
 }
 
-function renderMessage(item) {
+function messageText(item) {
+  return (item.blocks || [])
+    .filter((block) => block.kind === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim()
+}
+
+function latestConclusionId(messages) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index]
+    if (item?.kind === 'message' && item.role === 'assistant' && messageText(item) !== '') return item.id
+  }
+  return undefined
+}
+
+function createCopyFooter(item) {
+  const button = node('button', 'message-copy-footer')
+  button.type = 'button'
+  button.title = t('copyConclusion')
+  button.setAttribute('aria-label', t('copyConclusion'))
+  const icon = node('span', 'copy-icon', '⧉')
+  const label = node('span', 'copy-label', t('copy'))
+  button.append(icon, label)
+  button.addEventListener('click', () => {
+    copyText(messageText(item))
+    button.classList.add('copied')
+    icon.textContent = '✓'
+    label.textContent = t('copied')
+    setTimeout(() => {
+      button.classList.remove('copied')
+      icon.textContent = '⧉'
+      label.textContent = t('copy')
+    }, 2_000)
+  })
+  return button
+}
+
+function renderMessage(item, conclusionId) {
   if (item.kind === 'tool') return renderTool(item)
   if (item.kind === 'context') return renderContext(item)
   if (item.kind === 'notice') {
     const notice = node('div', `notice ${item.status || ''}`)
     notice.append(node('strong', '', item.title || t('status')))
     if (item.detail) notice.append(node('span', '', item.detail))
-    workDuration.update(notice, item.workDuration)
+    workDuration.update(notice, item.workDuration, item.status === 'running' && item.workDuration === undefined)
     return notice
   }
   const article = node('article', `message ${item.role || ''}`)
@@ -435,7 +549,8 @@ function renderMessage(item) {
   const body = node('div', 'message-body')
   streamingMessage.render(body, item)
   article.append(body)
-  workDuration.update(article, item.workDuration)
+  workDuration.update(article, item.workDuration, item.status === 'running' && item.workDuration === undefined)
+  if (item.role === 'assistant' && item.id === conclusionId) article.append(createCopyFooter(item))
   return article
 }
 
@@ -444,12 +559,85 @@ function renderTool(item) {
   const details = node('details', `tool-card ${item.status || ''}`)
   details.dataset.disclosureKey = 'tool'
   const summary = node('summary')
-  summary.append(node('span', 'tool-status'), node('span', 'tool-title', item.title || t('tool')))
+  summary.append(node('span', 'tool-status'), node('span', 'tool-title', toolDisplayName(item.title || t('tool'))))
+  if (item.detail && item.detail.trim() !== '') {
+    summary.append(node('span', 'tool-preview', toolPreviewText(item.detail)))
+  }
   details.append(summary)
-  if (item.detail) details.append(node('pre', 'tool-detail', item.detail))
+  if (item.detail && item.detail.trim() !== '') {
+    const detail = node('div', 'tool-detail')
+    renderToolDetail(detail, item.detail)
+    details.append(detail)
+  }
   container.append(details)
-  workDuration.update(container, item.workDuration)
+  workDuration.update(container, item.workDuration, item.status === 'running' && item.workDuration === undefined)
   return container
+}
+
+function toolDisplayName(name) {
+  if (name === '') return name
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+function toolPreviewText(detail) {
+  const trimmed = detail.trim()
+  if (isJsonText(trimmed)) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (typeof parsed.description === 'string' && parsed.description.trim() !== '') {
+        return summarizeLine(parsed.description)
+      }
+      const file = parsed.file_path ?? parsed.path ?? parsed.file
+      if (typeof file === 'string' && file.trim() !== '') {
+        return summarizeLine(file)
+      }
+      if (typeof parsed.command === 'string' && parsed.command.trim() !== '') {
+        return summarizeLine(parsed.command)
+      }
+    } catch {
+      // Fall through to raw text preview.
+    }
+  }
+  return summarizeLine(detail)
+}
+
+function summarizeLine(text) {
+  const single = text.replace(/\s+/g, ' ').trim()
+  return single.length > 90 ? `${single.slice(0, 90)}…` : single
+}
+
+function renderToolDetail(target, detail) {
+  const trimmed = detail.trim()
+  let source
+  if (isJsonText(trimmed)) {
+    try {
+      source = `\`\`\`json\n${JSON.stringify(JSON.parse(trimmed), null, 2)}\n\`\`\``
+    } catch {
+      source = undefined
+    }
+  } else if (looksLikeDiff(trimmed)) {
+    source = `\`\`\`diff\n${detail}\n\`\`\``
+  } else if (looksLikeCode(trimmed)) {
+    source = `\`\`\`\n${detail}\n\`\`\``
+  }
+  if (source === undefined) {
+    target.textContent = detail
+    return
+  }
+  target.classList.add('markdown-body')
+  renderMarkdown(target, source, markdownActions)
+}
+
+function isJsonText(text) {
+  return (text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))
+}
+
+function looksLikeDiff(text) {
+  return /^(?:diff --git |--- |\+\+\+ |@@ )/m.test(text)
+}
+
+function looksLikeCode(text) {
+  return /(?:^|\n)\s*(?:function|const|let|var|def|class|import|from|export|return|if|for|while|public|private|async|await)\b/m.test(text)
 }
 
 function renderContext(item) {
@@ -528,6 +716,28 @@ function renderQuestions(pending) {
   return form
 }
 
+function assistantConclusions(active) {
+  if (!active) return []
+  return (active.messages || [])
+    .filter((item) => item.kind === 'message' && item.role === 'assistant')
+    .map((item) => {
+      const text = (item.blocks || [])
+        .filter((block) => block.kind === 'text')
+        .map((block) => block.text)
+        .join('\n')
+        .trim()
+      return { id: item.id, text, time: item.time }
+    })
+    .filter((item) => item.text !== '')
+    .reverse()
+}
+
+function timelineSignature(active) {
+  return assistantConclusions(active)
+    .map((item) => `${item.id}:${item.text.slice(0, 200)}:${item.time}`)
+    .join('|')
+}
+
 function renderDetails() {
   if (!payload) return
   const active = payload.state.active
@@ -540,6 +750,7 @@ function renderDetails() {
     skills: active?.skills,
     subagents: active?.subagents,
     jobs: active?.jobs,
+    timeline: timelineSignature(active),
     running: active?.running,
   })
   if (nextSignature === detailSignature) return
@@ -611,6 +822,8 @@ function renderDetails() {
       button.append(node('small', '', `${agent.mode === 'continuable' ? t('continuableConversation') : t('oneShot')}${agent.hasChildren ? t('hasChildAgents') : ''}`))
       button.addEventListener('click', () => {
         composerConfiguration.reset()
+        closeTimeline()
+        clearPastedImages()
         post('selectSubagent', { sessionId: agent.id, mode: agent.mode })
       })
       fragment.append(button)
@@ -622,6 +835,27 @@ function renderDetails() {
       if (job.detail) row.append(node('small', '', job.detail))
       fragment.append(row)
     }
+  } else if (currentDetail === 'timeline') {
+    const conclusions = assistantConclusions(active)
+    conclusions.forEach((item, index) => {
+      const button = node('button', 'timeline-row')
+      button.type = 'button'
+      button.title = t('timeline')
+      const badge = node('span', 'timeline-index', `#${index + 1}`)
+      const copy = node('span', 'timeline-copy')
+      copy.append(node('strong', '', formatRelativeTime(item.time)))
+      copy.append(node('span', 'timeline-snippet', item.text))
+      button.append(badge, copy)
+      button.addEventListener('click', () => {
+        const target = elements.messages.querySelector(`[data-message-id="${cssEscape(item.id)}"]`)
+        if (target !== null) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          target.classList.add('timeline-highlight')
+          setTimeout(() => target.classList.remove('timeline-highlight'), 1_600)
+        }
+      })
+      fragment.append(button)
+    })
   }
   if (!fragment.childNodes.length) fragment.append(node('p', 'muted-empty', t('noContent')))
   elements.detailContent.replaceChildren(fragment)
@@ -644,7 +878,7 @@ function renderComposer(active) {
   const ready = payload.state.phase === 'connected' || payload.state.phase === 'reconnecting'
   elements.prompt.disabled = !ready
   if (active?.subagentMode === 'one-shot') elements.prompt.disabled = true
-  elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '')
+  elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '' && pastedImages.length === 0)
   elements.send.textContent = active?.running ? '■' : '↑'
   elements.send.title = active?.running ? t('stopGenerating') : t('sendTitle')
   contextMeter.update(active?.contextPressure)
@@ -739,22 +973,192 @@ function closeCommandMenu() {
   elements.commandMenu.replaceChildren()
 }
 
-function sendPrompt() {
+function openTimeline() {
   closeCommandMenu()
   fileMention.close()
   composerConfiguration.close()
+  renderTimelinePanel()
+  elements.timelinePanel.classList.remove('hidden')
+  elements.timelineToggle.classList.add('active')
+}
+
+function closeTimeline() {
+  elements.timelinePanel.classList.add('hidden')
+  elements.timelineToggle.classList.remove('active')
+  elements.timelinePanel.replaceChildren()
+}
+
+function renderTimelinePanel() {
+  const conclusions = assistantConclusions(payload?.state?.active)
+  const fragment = document.createDocumentFragment()
+  const header = node('div', 'timeline-panel-header')
+  header.append(node('strong', '', t('timeline')), node('span', 'timeline-panel-count', String(conclusions.length)))
+  fragment.append(header)
+  if (conclusions.length === 0) {
+    fragment.append(node('p', 'timeline-empty', t('noContent')))
+  } else {
+    for (const item of conclusions) {
+      const button = node('button', 'timeline-entry')
+      button.type = 'button'
+      const index = node('span', 'timeline-entry-index', `#${conclusions.indexOf(item) + 1}`)
+      const copy = node('span', 'timeline-entry-copy')
+      copy.append(node('strong', '', formatRelativeTime(item.time)))
+      copy.append(node('span', 'timeline-entry-snippet', item.text))
+      button.append(index, copy)
+      button.addEventListener('click', () => {
+        closeTimeline()
+        selectTimelineItem(item)
+      })
+      fragment.append(button)
+    }
+  }
+  elements.timelinePanel.replaceChildren(fragment)
+}
+
+function selectTimelineItem(item) {
+  const target = elements.messages.querySelector(`[data-message-id="${cssEscape(item.id)}"]`)
+  if (target === null) return
+  smoothScrollConversationTo(target)
+  target.classList.add('timeline-highlight')
+  setTimeout(() => target.classList.remove('timeline-highlight'), 1_600)
+}
+
+function smoothScrollConversationTo(target) {
+  const container = elements.conversation
+  const start = container.scrollTop
+  const targetScroll = start + target.getBoundingClientRect().top - container.getBoundingClientRect().top - 12
+  const duration = 420
+  const startedAt = Date.now()
+  const step = () => {
+    const progress = Math.min(1, (Date.now() - startedAt) / duration)
+    const eased = 1 - Math.pow(1 - progress, 3)
+    container.scrollTop = start + (targetScroll - start) * eased
+    if (progress < 1) window.requestAnimationFrame(step)
+  }
+  window.requestAnimationFrame(step)
+}
+
+const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+
+async function addPastedImages(files) {
+  const accepted = []
+  for (const file of files) {
+    try {
+      accepted.push(await fileToImageAttachment(file))
+    } catch {
+      // Unsupported or unreadable clipboard image; keep the rest.
+    }
+  }
+  if (accepted.length === 0) return
+  pastedImages.push(...accepted)
+  renderImagePreviews()
+  resizePrompt()
+}
+
+function fileToImageAttachment(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const match = /^data:([^;,]+);base64,(.*)$/s.exec(result)
+      if (!match || !IMAGE_MEDIA_TYPES.has(match[1]) || match[2] === '') {
+        reject(new Error('Unsupported image attachment'))
+        return
+      }
+      const mediaType = match[1]
+      const data = match[2]
+      resolve({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        mediaType,
+        data,
+        ...(file.name === undefined || file.name === '' ? {} : { name: file.name }),
+        previewUrl: result,
+      })
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function renderImagePreviews() {
+  elements.imagePreviewList.classList.toggle('hidden', pastedImages.length === 0)
+  const fragment = document.createDocumentFragment()
+  for (const image of pastedImages) {
+    const item = node('div', 'image-preview-item')
+    item.dataset.imageId = image.id
+    const button = node('button', 'image-preview-button')
+    button.type = 'button'
+    button.title = t('imagePreview')
+    button.setAttribute('aria-label', t('imagePreview'))
+    const thumb = node('img', 'image-preview-thumb')
+    thumb.src = image.previewUrl
+    thumb.alt = image.name || t('imageAttachment')
+    button.append(thumb)
+    button.addEventListener('click', () => openImagePreview(image))
+    const remove = node('button', 'image-preview-remove', '×')
+    remove.type = 'button'
+    remove.title = t('removeImageAttachment')
+    remove.setAttribute('aria-label', t('removeImageAttachment'))
+    remove.addEventListener('click', (event) => {
+      event.stopPropagation()
+      removePastedImage(image.id)
+    })
+    item.append(button, remove)
+    fragment.append(item)
+  }
+  elements.imagePreviewList.replaceChildren(fragment)
+}
+
+function removePastedImage(id) {
+  pastedImages = pastedImages.filter((image) => image.id !== id)
+  renderImagePreviews()
+  resizePrompt()
+}
+
+function openImagePreview(image) {
+  elements.imageLightboxImage.src = image.previewUrl
+  elements.imageLightboxImage.alt = image.name || t('imageAttachment')
+  elements.imageLightboxName.textContent = image.name || ''
+  elements.imageLightbox.classList.remove('hidden')
+  elements.imageLightboxClose.focus()
+}
+
+function closeImagePreview() {
+  elements.imageLightbox.classList.add('hidden')
+  elements.imageLightboxImage.src = ''
+  elements.imageLightboxImage.alt = ''
+  elements.imageLightboxName.textContent = ''
+}
+
+function clearPastedImages() {
+  pastedImages = []
+  renderImagePreviews()
+  closeImagePreview()
+}
+
+function sendPrompt() {
+  closeCommandMenu()
+  closeTimeline()
+  fileMention.close()
+  composerConfiguration.close()
   const text = elements.prompt.value.trim()
-  if (!text) return
+  if (!text && pastedImages.length === 0) return
   const configuration = composerConfiguration.selection()
   composerConfiguration.markSubmitted()
   post('sendPrompt', {
     text,
     mode: 'queue',
     context: editorContext.input(),
+    images: pastedImages.map(({ mediaType, data, name }) => ({
+      mediaType,
+      data,
+      ...(name === undefined ? {} : { name }),
+    })),
     ...(configuration === undefined ? {} : { configuration }),
   })
   editorContext.markSubmitted()
   elements.prompt.value = ''
+  clearPastedImages()
   resizePrompt()
 }
 
@@ -799,7 +1203,7 @@ function patchStreamingMessage(element, item) {
   const body = element.querySelector('.message-body')
   if (!body) return false
   if (!streamingMessage.patch(body, item)) return false
-  workDuration.update(element, item.workDuration)
+  workDuration.update(element, item.workDuration, item.status === 'running' && item.workDuration === undefined)
   return true
 }
 
@@ -824,6 +1228,14 @@ function disclosureElements(root) {
 
 function isNearBottom(element) {
   return element.scrollHeight - element.scrollTop - element.clientHeight < 100
+}
+
+function scrollConversationToBottom() {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      elements.conversation.scrollTop = elements.conversation.scrollHeight
+    })
+  })
 }
 
 function formatRelativeTime(time) {

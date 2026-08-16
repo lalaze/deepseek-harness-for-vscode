@@ -1,0 +1,51 @@
+/** Built-in plugin definitions shared by the catalog and the default installer. */
+export interface DefaultBuiltinPlugin {
+  readonly id: string
+  readonly name: string
+  readonly owner: string
+  readonly description: { readonly en: string; readonly zh: string }
+  readonly category: string
+  readonly categoryLabel: { readonly en: string; readonly zh: string }
+  readonly repositoryUrl: string
+  readonly installSpec: string
+  readonly installedName: string
+  readonly npmPackage?: string
+  readonly updatedAt: string
+  readonly compatibility: 'agent' | 'partial' | 'official-web-ui' | 'unknown'
+}
+
+export const DEFAULT_BUILTIN_PLUGINS: readonly DefaultBuiltinPlugin[] = [
+  {
+    id: 'https://github.com/ysr666/dsh-vision-router',
+    name: 'DSH Vision Router',
+    owner: 'ysr666',
+    description: {
+      en: 'Eyes for text-only DeepSeek Harness agents: built-in free vision chain (no key) plus pixel-level vision tools for Q&A, grounding, crop, pixel diff, colors, OCR, SVG trace, cutout, and screenshots.',
+      zh: '为纯文本 DeepSeek Harness Agent 提供视觉能力：内置免费视觉链路（无需密钥）加像素级视觉工具，支持问答、定位、裁剪、像素对比、取色、OCR、SVG 矢量化、抠图与截图。',
+    },
+    category: 'vision',
+    categoryLabel: { en: 'Vision', zh: '视觉' },
+    repositoryUrl: 'https://github.com/ysr666/dsh-vision-router',
+    installSpec: 'dsh-vision-router',
+    installedName: 'dsh-vision-router',
+    npmPackage: 'dsh-vision-router',
+    updatedAt: '2026-08-14T00:00:00Z',
+    compatibility: 'agent',
+  },
+  {
+    id: 'https://github.com/yjh051108/dsh-super-injector',
+    name: 'DSH Super Injector',
+    owner: 'yjh051108',
+    description: {
+      en: 'Runtime super-module injector for DSH: hot-inject local plugin packages, hot-reload, dev staging, one-click uninstall, route self-healing, and plugin management UI.',
+      zh: 'DSH 超级模组注入器：运行时注入本地插件包、热重载、开发侧挂区、一键卸载、路由自愈与插件管理 UI。',
+    },
+    category: 'routing',
+    categoryLabel: { en: 'Routing & workflow', zh: '路由与工作流' },
+    repositoryUrl: 'https://github.com/yjh051108/dsh-super-injector',
+    installSpec: 'https://github.com/yjh051108/dsh-super-injector/releases/download/v0.3.3/dsh-external-dsh-super-injector-0.3.3.tgz',
+    installedName: '@dsh-external/dsh-super-injector',
+    updatedAt: '2026-08-13T00:00:00Z',
+    compatibility: 'agent',
+  },
+]

@@ -56,7 +56,7 @@ export class StreamingMessageComponent {
       details.dataset.autoOpen = running ? 'true' : 'false'
       details.open = running
       const summary = this.options.document.createElement('summary')
-      summary.append(this.reasoningDot(), this.label(running), this.chevron())
+      summary.append(this.reasoningDot(), this.label(running), this.reasoningPreview(block.text), this.chevron())
       const content = this.options.document.createElement('div')
       content.className = `reasoning-content markdown-body${running ? ' streaming-content' : ''}`
       this.renderContent(content, block, running)
@@ -80,6 +80,12 @@ export class StreamingMessageComponent {
       rendered.dataset.autoOpen = running ? 'true' : 'false'
       rendered.open = running
       label.textContent = running ? this.options.thinkingLabel() : this.options.reasoningLabel()
+      const summary = rendered.querySelector<HTMLElement>('.reasoning-summary')
+      if (summary !== null) {
+        const value = this.reasoningPreviewText(block.text)
+        summary.textContent = value
+        summary.title = value
+      }
       content.classList.toggle('streaming-content', running)
       this.renderContent(content, block, running)
       return true
@@ -130,6 +136,20 @@ export class StreamingMessageComponent {
     const state = this.streams.get(target)
     if (state?.frame !== undefined) cancelAnimationFrame(state.frame)
     this.streams.delete(target)
+  }
+
+  private reasoningPreview(text: string): HTMLElement {
+    const preview = this.options.document.createElement('span')
+    preview.className = 'reasoning-summary'
+    const value = this.reasoningPreviewText(text)
+    preview.textContent = value
+    preview.title = value
+    return preview
+  }
+
+  private reasoningPreviewText(text: string): string {
+    const first = text.split(/\r?\n/u).map((line) => line.trim()).find((line) => line !== '') ?? ''
+    return first.length > 80 ? `${first.slice(0, 80)}…` : first
   }
 
   private reasoningDot(): HTMLElement {

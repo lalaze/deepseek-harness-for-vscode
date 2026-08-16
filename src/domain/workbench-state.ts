@@ -68,6 +68,8 @@ export interface PendingQuestionView {
 
 export interface ModelView {
   readonly provider: string
+  /** Provider display name, e.g. "DeepSeek + 自动识图". */
+  readonly providerName: string
   readonly id: string
   readonly name: string
   readonly description?: string
@@ -307,6 +309,12 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
     messages.push(message)
     if (turn !== undefined) messageTurns.set(message.id, turn)
   }
+  const updateMessageStatus = (id: string, status: Exclude<ChatItem['status'], undefined>): void => {
+    const index = messages.findIndex((item) => item.id === id)
+    const current = messages[index]
+    if (current === undefined) return
+    messages[index] = { ...current, status }
+  }
   const finalSteps = new Set<string>()
   const partials = new Map<string, PartialBlocks>()
   const commandRuns = new Map<string, {
@@ -396,8 +404,10 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         break
       }
       case 'tool/result': {
+        const callId = String(event.data.message.source.callId)
+        updateMessageStatus(`tool-${callId}-call`, event.data.error === undefined ? 'success' : 'error')
         addMessage({
-          id: `tool-${String(event.data.message.source.callId)}-result`,
+          id: `tool-${callId}-result`,
           seq: event.seq,
           time: event.time,
           kind: 'tool',

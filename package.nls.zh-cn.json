@@ -1,5 +1,5 @@
 {
-  "extension.description": "原生 DeepSeek Harness VS Code 编码 Agent，无 WebUI 嵌套且无需本地部署 Harness。",
+  "extension.description": "原生 DeepSeek Harness VS Code 编码 Agent，使用本地 Harness Gateway，无需单独部署。",
   "command.openChat": "DeepSeek Harness: 打开工作台",
   "command.reloadRuntime": "DeepSeek Harness: 重新加载工作台",
   "command.setApiKey": "DeepSeek Harness: 设置 API Key",

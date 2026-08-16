@@ -1,21 +1,32 @@
 import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import type { BundledRuntimeResolver } from '../runtime/bundled-runtime.js'
+import { DEFAULT_BUILTIN_PLUGINS } from './default-plugins.js'
 import { isNpmPackageName, normalizePluginSpec } from './plugin-spec.js'
+import { RoutingSuiteInstaller } from './routing-suite/installer.js'
+import { ROUTING_SUITE_MANIFEST } from './routing-suite/manifest.js'
 import type { InstalledDshPlugin } from './types.js'
 
 const PROFILE = 'web'
+const DEFAULT_PLUGINS_SEED_FILE = 'default-plugins-seeded.json'
 const MAX_ERROR_OUTPUT = 12_000
 
 /** Manages the exact `web` profile booted by this extension through DSH's CLI. */
 export class DshPluginManager {
+  private readonly routingSuite: RoutingSuiteInstaller
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly resolver: BundledRuntimeResolver,
     private readonly output: vscode.OutputChannel,
-  ) {}
+  ) {
+    this.routingSuite = new RoutingSuiteInstaller(this.harnessHome(), {
+      installPackage: async (spec) => { await this.run(['add', spec]) },
+      removePackage: async (name) => { await this.run(['remove', name]) },
+    })
+  }
 
   async listInstalled(): Promise<readonly InstalledDshPlugin[]> {
     const profileDir = this.profileDirectory()
@@ -43,11 +54,46 @@ export class DshPluginManager {
         includesWebClient: manifestDsh !== undefined && isRecord(manifestDsh.client),
       }
     }))
-    return installed.filter((item): item is InstalledDshPlugin => item !== undefined)
-      .sort((left, right) => left.name.localeCompare(right.name))
+    const defaultNames = new Set(DEFAULT_BUILTIN_PLUGINS.map((plugin) => plugin.installedName))
+    const resolved = installed
+      .filter((item): item is InstalledDshPlugin => item !== undefined)
+      .map((item) => defaultNames.has(item.name) ? { ...item, source: 'built-in' } : item)
+    const suite = await this.routingSuite.status(dependencies)
+    if (suite !== undefined) {
+      const withoutManagedInjector = resolved.filter((item) => item.name !== suite.injectorName)
+      withoutManagedInjector.push({
+        name: ROUTING_SUITE_MANIFEST.installedName,
+        version: suite.version,
+        source: 'built-in managed suite',
+        description: 'Super Injector with Router Standard and Router Spec presets.',
+        repositoryUrl: ROUTING_SUITE_MANIFEST.repositoryUrl,
+        includesWebClient: true,
+      })
+      return withoutManagedInjector.sort((left, right) => left.name.localeCompare(right.name))
+    }
+    return resolved.sort((left, right) => left.name.localeCompare(right.name))
+  }
+
+  /** Installs the extension's default built-in plugins once when they are missing. */
+  async ensureDefaultPlugins(): Promise<void> {
+    if (await this.defaultPluginsSeeded()) return
+    const installed = await this.listInstalled()
+    const installedNames = new Set(installed.map((item) => item.name))
+    for (const plugin of DEFAULT_BUILTIN_PLUGINS) {
+      if (installedNames.has(plugin.installedName) || (plugin.npmPackage !== undefined && installedNames.has(plugin.npmPackage))) continue
+      // The managed routing suite already provides the Super Injector.
+      if (plugin.installedName === ROUTING_SUITE_MANIFEST.injector.name && installedNames.has(ROUTING_SUITE_MANIFEST.installedName)) continue
+      await this.install(plugin.installSpec)
+    }
+    await this.markDefaultPluginsSeeded()
   }
 
   async install(value: string): Promise<readonly InstalledDshPlugin[]> {
+    if (this.routingSuite.matches(value)) {
+      const dependencies = await this.profileDependencies()
+      await this.routingSuite.install(dependencies[ROUTING_SUITE_MANIFEST.injector.name] !== undefined)
+      return await this.listInstalled()
+    }
     let spec: string
     try {
       spec = normalizePluginSpec(value)
@@ -59,6 +105,10 @@ export class DshPluginManager {
   }
 
   async remove(name: string): Promise<readonly InstalledDshPlugin[]> {
+    if (name === ROUTING_SUITE_MANIFEST.installedName) {
+      await this.routingSuite.remove()
+      return await this.listInstalled()
+    }
     if (!isNpmPackageName(name)) throw new Error(vscode.l10n.t('Invalid DSH plugin package name.'))
     const installed = await this.listInstalled()
     if (!installed.some((item) => item.name === name)) throw new Error(vscode.l10n.t('DSH plugin is not installed: {0}', name))
@@ -103,6 +153,28 @@ export class DshPluginManager {
 
   private profileDirectory(): string {
     return path.join(this.harnessHome(), 'profiles', PROFILE)
+  }
+
+  private async profileDependencies(): Promise<Record<string, string>> {
+    const profile = await readJson(path.join(this.profileDirectory(), 'package.json'))
+    return isRecord(profile) ? stringRecord(profile.dependencies) : {}
+  }
+
+  private async defaultPluginsSeeded(): Promise<boolean> {
+    try {
+      await readFile(path.join(this.harnessHome(), DEFAULT_PLUGINS_SEED_FILE), 'utf8')
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private async markDefaultPluginsSeeded(): Promise<void> {
+    await writeFile(
+      path.join(this.harnessHome(), DEFAULT_PLUGINS_SEED_FILE),
+      `${JSON.stringify({ version: 1 })}\n`,
+      'utf8',
+    )
   }
 }
 

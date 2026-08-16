@@ -18,7 +18,7 @@ import { WorkbenchViewProvider } from './ui/workbench-view-provider.js'
 let activeRuntime: HarnessHostRuntime | undefined
 
 /** Activates one self-contained Harness workbench; no external deployment is required. */
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('DeepSeek Harness', { log: true })
   const configuration = new ConfigurationService()
   const credentials = new CredentialStore(context.secrets)
@@ -28,6 +28,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const gateway = new HarnessGatewayService(runtime, configuration, connectionSettings, output)
   const connectionTest = new ConnectionTestService(() => gateway.providerControlClient())
   const pluginManager = new DshPluginManager(context, resolver, output)
+  try {
+    await pluginManager.ensureDefaultPlugins()
+  } catch (cause) {
+    output.appendLine(`[plugin] Failed to ensure default plugins: ${cause instanceof Error ? cause.message : String(cause)}`)
+  }
   const pluginCatalog = new DshPluginCatalogService()
   const pluginCenter = new DshPluginCenterController(pluginManager, pluginCatalog, gateway)
   const editorSelection = new EditorSelectionService()

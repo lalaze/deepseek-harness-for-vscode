@@ -132,12 +132,14 @@ function models(provider: string) {
   return [
     {
       provider,
+      providerName: provider,
       id: 'deepseek-v4-flash',
       label: 'DeepSeek V4 Flash',
       reasoning: reasoning(),
     },
     {
       provider,
+      providerName: provider,
       id: 'deepseek-v4-pro',
       label: 'DeepSeek V4 Pro',
       reasoning: reasoning(),

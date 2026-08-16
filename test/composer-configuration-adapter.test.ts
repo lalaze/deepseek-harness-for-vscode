@@ -12,6 +12,7 @@ describe('composer configuration adapter', () => {
     const result = composerConfigurationInput(payload({
       models: [{
         provider: 'deepseek-official',
+        providerName: 'DeepSeek',
         id: 'deepseek-v4-pro',
         name: 'DeepSeek V4 Pro',
         description: 'Complex work',
@@ -40,26 +41,14 @@ describe('composer configuration adapter', () => {
         agentPreset: 'standard',
       },
     })
-    expect(result?.models).toEqual([
-      {
-        provider: 'deepseek-official',
-        id: 'deepseek-v4-flash',
-        label: 'DeepSeek V4 Flash',
-        description: 'Fast',
-        reasoning: [
-          { id: 'off', label: 'Off' },
-          { id: 'high', label: 'High' },
-          { id: 'max', label: 'Maximum' },
-        ],
-      },
-      {
-        provider: 'deepseek-official',
-        id: 'deepseek-v4-pro',
-        label: 'DeepSeek V4 Pro',
-        description: 'Complex work',
-        reasoning: [{ id: 'max', label: 'Maximum', description: 'Deep reasoning' }],
-      },
-    ])
+    expect(result?.models).toEqual([{
+      provider: 'deepseek-official',
+      providerName: 'DeepSeek',
+      id: 'deepseek-v4-pro',
+      label: 'DeepSeek V4 Pro',
+      description: 'Complex work',
+      reasoning: [{ id: 'max', label: 'Maximum', description: 'Deep reasoning' }],
+    }])
     expect(result?.presets.map((preset) => preset.id)).toEqual(['standard'])
   })
 
@@ -68,6 +57,7 @@ describe('composer configuration adapter', () => {
 
     expect(result?.models[0]).toEqual({
       provider: 'deepseek-official',
+      providerName: 'DeepSeek Official',
       id: 'deepseek-v4-flash',
       label: 'DeepSeek V4 Flash',
       description: 'Fast',
@@ -80,23 +70,26 @@ describe('composer configuration adapter', () => {
     expect(result?.presets.map((preset) => preset.id)).toEqual(['standard', 'code'])
   })
 
-  it('keeps source selection separate and exposes only Flash/Pro for each configured source', () => {
+  it('uses the live Harness catalog so models from every provider appear automatically', () => {
     const result = composerConfigurationInput(payload({
       models: [
         {
           provider: 'deepseek-official',
+          providerName: 'DeepSeek Official',
           id: 'deepseek-v4-flash',
           name: 'Official Flash',
           reasoning: [],
         },
         {
           provider: 'packycode',
+          providerName: 'PackyCode',
           id: 'deepseek-v4-pro',
           name: 'Packy Pro',
           reasoning: [],
         },
         {
           provider: 'packycode',
+          providerName: 'PackyCode',
           id: 'unrelated-model',
           name: 'Do not render',
           reasoning: [],
@@ -115,9 +108,8 @@ describe('composer configuration adapter', () => {
     ])
     expect(result?.models.map(({ provider, id }) => ({ provider, id }))).toEqual([
       { provider: 'deepseek-official', id: 'deepseek-v4-flash' },
-      { provider: 'deepseek-official', id: 'deepseek-v4-pro' },
-      { provider: 'packycode', id: 'deepseek-v4-flash' },
       { provider: 'packycode', id: 'deepseek-v4-pro' },
+      { provider: 'packycode', id: 'unrelated-model' },
     ])
   })
 
