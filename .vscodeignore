@@ -3,6 +3,7 @@
 src/**
 test/**
 coverage/**
+docs/images/**
 dist/**/*.map
 .gitignore
 eslint.config.mjs

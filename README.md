@@ -6,12 +6,6 @@ A native VS Code coding-agent extension powered by [DeepSeek Harness](https://gi
 
 > This is a community-maintained `0.4.6` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
 
-<p align="center">
-  <a href="image.png">
-    <img src="image.png" alt="DeepSeek Harness workbench" width="360">
-  </a>
-</p>
-
 ## Features
 
 - **Native VS Code workbench** — all interaction happens in the sidebar; the local Harness Gateway exposes only the loopback API transport, while the official WebUI is neither served nor embedded.
@@ -29,6 +23,29 @@ A native VS Code coding-agent extension powered by [DeepSeek Harness](https://gi
 - **Zero-deployment runtime** — official `dsh`, pnpm, and standalone Node 22.22.3 are bundled in each platform VSIX and managed by the extension.
 
 Open the workbench with `Ctrl+Alt+H` on Windows/Linux or `Cmd+Alt+H` on macOS.
+
+## Interface preview
+
+The workbench follows the VS Code display language. The screenshots below use Simplified Chinese; select either image to view it at full resolution.
+
+<table>
+  <tr>
+    <td align="center" width="56%">
+      <a href="docs/images/workbench-overview.png">
+        <img src="docs/images/workbench-overview.png" alt="DeepSeek Harness native VS Code workbench" width="420">
+      </a>
+    </td>
+    <td align="center" width="44%">
+      <a href="docs/images/model-and-effort.png">
+        <img src="docs/images/model-and-effort.png" alt="Model, DSH mode, and reasoning effort controls" width="300">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Native conversation workbench</sub></td>
+    <td align="center"><sub>Model, DSH mode, and reasoning effort</sub></td>
+  </tr>
+</table>
 
 ## Installation
 
@@ -51,6 +68,14 @@ No Harness install or start command is required.
 ## DSH plugins
 
 Open the **⊞ Plugins** button in the workbench header to browse repositories read directly from the [`dsh-plugin` GitHub topic](https://github.com/topics/dsh-plugin). Results are merged with [Awesome DSH Plugin](https://awesome-dsh-plugin.com/) metadata for curated categories, localized descriptions, and npm install specs. The **Installed** tab also accepts one package spec directly, including an npm package, `github:owner/repository`, a local path without shell metacharacters, or a tarball URL.
+
+<p align="center">
+  <a href="docs/images/plugin-marketplace.png">
+    <img src="docs/images/plugin-marketplace.png" alt="Native DSH plugin marketplace" width="500">
+  </a>
+  <br>
+  <sub>Native plugin discovery, compatibility labels, and managed installation</sub>
+</p>
 
 The extension uses the official `dsh plugin --profile web add/remove` workflow. Plugin profile files live under the extension's `globalStorageUri/harness-home/profiles/web`; Harness is stopped while pnpm changes that profile and is then restarted automatically. The bundled pnpm means no system package manager is required.
 

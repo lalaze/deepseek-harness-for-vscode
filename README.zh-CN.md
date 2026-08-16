@@ -24,6 +24,29 @@
 
 快捷键：Windows/Linux 使用 `Ctrl+Alt+H`，macOS 使用 `Cmd+Alt+H` 打开工作台。
 
+## 界面预览
+
+界面会自动跟随 VS Code 显示语言。点击缩略图可查看原始分辨率截图。
+
+<table>
+  <tr>
+    <td align="center" width="56%">
+      <a href="docs/images/workbench-overview.png">
+        <img src="docs/images/workbench-overview.png" alt="DeepSeek Harness 原生 VS Code 工作台" width="420">
+      </a>
+    </td>
+    <td align="center" width="44%">
+      <a href="docs/images/model-and-effort.png">
+        <img src="docs/images/model-and-effort.png" alt="模型、DSH 模式与推理等级设置" width="300">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub>原生对话工作台</sub></td>
+    <td align="center"><sub>模型、DSH 模式与推理等级</sub></td>
+  </tr>
+</table>
+
 ## 安装
 
 1. 从 [Releases](https://github.com/skymecode/deepseek-harness-for-vscode/releases) 下载与你的平台匹配的 VSIX。
@@ -45,6 +68,14 @@
 ## DSH 插件
 
 点击工作台标题栏的 **⊞ 插件**，可以直接浏览 [`dsh-plugin` GitHub Topic](https://github.com/topics/dsh-plugin) 中的仓库。市场结果还会合并 [Awesome DSH Plugin](https://awesome-dsh-plugin.com/) 的精选分类、中文介绍和 npm 安装参数。在“已安装”页可直接输入 npm 包、`github:owner/repository`、不含 shell 元字符的本地路径或 tarball URL。
+
+<p align="center">
+  <a href="docs/images/plugin-marketplace.png">
+    <img src="docs/images/plugin-marketplace.png" alt="原生 DSH 插件市场" width="500">
+  </a>
+  <br>
+  <sub>插件发现、兼容性标识与受控安装</sub>
+</p>
 
 扩展严格使用官方 `dsh plugin --profile web add/remove` 流程。插件配置保存在扩展的 `globalStorageUri/harness-home/profiles/web`；pnpm 修改配置期间 Harness 会安全停止，完成后自动重启。pnpm 已随 VSIX 内置，无需安装系统包管理器。
 
