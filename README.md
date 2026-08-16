@@ -6,6 +6,12 @@ A native VS Code coding-agent extension powered by [DeepSeek Harness](https://gi
 
 > This is a community-maintained `0.4.6` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
 
+<p align="center">
+  <a href="image.png">
+    <img src="image.png" alt="DeepSeek Harness workbench" width="360">
+  </a>
+</p>
+
 ## Features
 
 - **Native VS Code workbench** — all interaction happens in the sidebar; the local Harness Gateway exposes only the loopback API transport, while the official WebUI is neither served nor embedded.
@@ -54,14 +60,14 @@ Marketplace cards classify known entries as **Agent compatible**, **Agent works 
 
 ## Configuration
 
-| Setting | Default | Description |
-|---|---|---|
-| `deepseekHarness.model` | `deepseek-v4-flash` | Default model for new sessions |
-| `deepseekHarness.reasoningEffort` | `high` | `off` / `high` / `max` |
-| `deepseekHarness.agentPreset` | `standard` | Default Agent Preset for new sessions |
-| `deepseekHarness.provider` | `deepseek-official` | Default source selected from the extension's Connection settings panel |
-| `deepseekHarness.permissionMode` | `workspace-write` | `read-only` / `workspace-write` / `danger-full-access` |
-| `deepseekHarness.autoAttachSelection` | `true` | Automatically attach the active editor selection when sending |
+| Setting                               | Default             | Description                                                            |
+| ------------------------------------- | ------------------- | ---------------------------------------------------------------------- |
+| `deepseekHarness.model`               | `deepseek-v4-flash` | Default model for new sessions                                         |
+| `deepseekHarness.reasoningEffort`     | `high`              | `off` / `high` / `max`                                                 |
+| `deepseekHarness.agentPreset`         | `standard`          | Default Agent Preset for new sessions                                  |
+| `deepseekHarness.provider`            | `deepseek-official` | Default source selected from the extension's Connection settings panel |
+| `deepseekHarness.permissionMode`      | `workspace-write`   | `read-only` / `workspace-write` / `danger-full-access`                 |
+| `deepseekHarness.autoAttachSelection` | `true`              | Automatically attach the active editor selection when sending          |
 
 Provider endpoints and write-only credential references are managed through the bundled Harness settings and credentials services. API keys are stored in the extension's private Harness home, are never returned to the webview, and are not written to project-level `.vscode/settings.json`. Legacy `deepseekHarness.apiKey`, `baseUrl`, and `providers` values are imported once and then removed.
 
@@ -71,13 +77,13 @@ Automatically attached selections are limited to 16 KB and are truncated when ne
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `DeepSeek Harness: Open Workbench` | Open the sidebar workbench |
+| Command                              | Description                       |
+| ------------------------------------ | --------------------------------- |
+| `DeepSeek Harness: Open Workbench`   | Open the sidebar workbench        |
 | `DeepSeek Harness: Reload Workbench` | Restart the runtime and reconnect |
-| `DeepSeek Harness: Set API Key` | Save the API Key |
-| `DeepSeek Harness: Clear API Key` | Clear the API Key |
-| `DeepSeek Harness: Show Logs` | Open diagnostic logs |
+| `DeepSeek Harness: Set API Key`      | Save the API Key                  |
+| `DeepSeek Harness: Clear API Key`    | Clear the API Key                 |
+| `DeepSeek Harness: Show Logs`        | Open diagnostic logs              |
 
 ## Localization
 
