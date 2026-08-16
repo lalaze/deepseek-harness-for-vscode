@@ -2,6 +2,7 @@
 
 ## 0.4.5
 
+- Harness 后台改为真正的无界面 Gateway：保留官方 `/api` 与事件传输，但禁用官方 SPA 静态 fallback；访问回环端口根路径现在返回 404，不再提供 WebUI。
 - 新增原生连接设置面板：支持 DeepSeek 官方服务与多个 OpenAI 兼容中转站，并可为各提供商配置 Base URL、只写 API Key 和连通性测试。
 - Provider 设置与凭据统一通过 Harness 本地控制面管理；旧版 VS Code `apiKey`、`baseUrl` 与 `providers` 配置会在首次连接后安全迁移。
 - 模型选择器改为读取 Harness 实时模型目录，自动显示不同 Provider 提供的模型、来源名称及对应推理等级。

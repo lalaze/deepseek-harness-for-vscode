@@ -14,7 +14,11 @@ describe('Harness Web profile overlay', () => {
       provider: 'packycode',
       permissionMode: 'workspace-write',
       autoAttachSelection: true,
-    })
+    }, '/extension/dist/runtime/gateway-runtime.mjs')
+    expect(overlay).toContain('id: web-runtime')
+    expect(overlay).toContain('disabled: true')
+    expect(overlay).toContain('id: vscode-gateway-runtime')
+    expect(overlay).toContain('name: "/extension/dist/runtime/gateway-runtime.mjs"')
     expect(overlay).toContain('reasoningEffort: max')
     expect(overlay).toContain('provider: "packycode"')
     expect(overlay).toContain('model: deepseek-v4-pro')
@@ -32,9 +36,10 @@ describe('Harness Web profile overlay', () => {
       provider: 'custom: route',
       permissionMode: 'read-only',
       autoAttachSelection: false,
-    })
+    }, 'C:\\Extensions\\DeepSeek Harness\\gateway-runtime.mjs')
     expect(overlay).toContain('thinking: disabled')
     expect(overlay).toContain('provider: "custom: route"')
     expect(overlay).toContain('defaultPreset: read-only')
+    expect(() => load(overlay)).not.toThrow()
   })
 })

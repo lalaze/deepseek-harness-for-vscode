@@ -1,6 +1,6 @@
 # 架构说明
 
-扩展采用“原生 VS Code 工作台 + Harness Gateway”的单扩展架构。扩展会启动本地 DSH Web 服务作为 Harness Gateway，但原生工作台不嵌入官方 WebUI；扩展只把官方 Harness 当作本机 Agent 引擎，通过强类型 RPC 和事件流调用它。
+扩展采用“原生 VS Code 工作台 + Harness Gateway”的单扩展架构。扩展会启动 DSH Web profile 中的本地 API Gateway，但禁用挂载官方 SPA fallback 的 `web-runtime`，并插入扩展自有的无界面 runtime provider；根路径返回 404，不加载、提供或嵌入官方 WebUI。扩展只把官方 Harness 当作本机 Agent 引擎，通过强类型 RPC 和事件流调用它。
 
 ```text
 Native Webview（会话、消息、工具、推理、审批、计划）
@@ -13,6 +13,9 @@ HarnessGatewayService（会话状态、历史修复、业务命令）
                     │ 127.0.0.1:随机端口
                     ▼
 HarnessHostRuntime（VSIX 内置 Node + 官方 dsh Gateway）
+                    │ 替换 web-runtime
+                    ▼
+GatewayRuntimePlugin（仅提供 webRuntime，不注册静态页面 fallback）
 ```
 
 插件管理与对话 RPC 使用两条相互隔离的应用链路：
@@ -65,7 +68,7 @@ test/           运行时解析、配置覆盖和事件投影单元测试
 
 ## 状态与协议边界
 
-`HarnessHostRuntime` 启动官方 `dsh web` 命令，但只使用它提供的 Gateway；官方 HTML/JS 资源不进入 Webview。进程固定绑定回环地址，端口由操作系统随机分配。
+`HarnessHostRuntime` 启动官方 `dsh web` profile 以复用 Host、RPC 与事件传输，但 overlay 会禁用组合中的 `web-runtime` 行，再插入扩展自有的 `GatewayRuntimePlugin`。该插件只提供连接层要求的 `webRuntime` 服务，不挂载 `dsh-host-frontend-static`，所以根路径及其他非 API 路径返回 404；官方 HTML/JS 不会被提供或进入 Webview。进程固定绑定回环地址，端口由操作系统随机分配。
 
 `NodeGatewayClient` 继承官方 `AbstractApiClient`，因此请求封装、RPC id、响应 schema 与业务错误继续由 Harness 的官方契约校验。扩展只补充 VS Code Extension Host 所需的 `ws` 下行传输。
 

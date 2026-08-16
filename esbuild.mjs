@@ -7,6 +7,7 @@ const watch = process.argv.includes('--watch')
 if (production) {
   await Promise.all([
     rm('dist/extension.cjs.map', { force: true }),
+    rm('dist/runtime/gateway-runtime.mjs.map', { force: true }),
     rm('dist/webview/chat.js.map', { force: true }),
   ])
 }
@@ -32,6 +33,18 @@ const contexts = await Promise.all([
     platform: 'browser',
     target: 'chrome120',
     outfile: 'dist/webview/chat.js',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    logLevel: 'info',
+  }),
+  esbuild.context({
+    entryPoints: ['src/runtime/gateway-runtime-plugin.ts'],
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    target: 'node22',
+    outfile: 'dist/runtime/gateway-runtime.mjs',
     minify: production,
     sourcemap: !production,
     sourcesContent: false,

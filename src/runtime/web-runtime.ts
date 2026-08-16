@@ -88,8 +88,9 @@ export class HarnessHostRuntime implements vscode.Disposable {
     const launch = await this.resolver.resolve()
     const home = path.join(this.context.globalStorageUri.fsPath, 'harness-home')
     const overlay = path.join(home, 'vscode.patch.yml')
+    const gatewayPlugin = path.join(this.context.extensionUri.fsPath, 'dist', 'runtime', 'gateway-runtime.mjs')
     await mkdir(home, { recursive: true })
-    await writeFile(overlay, renderOverlay(configuration), 'utf8')
+    await writeFile(overlay, renderOverlay(configuration, gatewayPlugin), 'utf8')
 
     const args = [...launch.args, 'web', '--patch', overlay, '--host', '127.0.0.1', '--port', '0']
     const env: NodeJS.ProcessEnv = {
@@ -132,7 +133,7 @@ export class HarnessHostRuntime implements vscode.Disposable {
         const lines = buffer.split(/\r?\n/u)
         buffer = lines.pop() ?? ''
         for (const line of lines) {
-          const match = /dsh web:\s+(http:\/\/127\.0\.0\.1:\d+)/u.exec(line)
+          const match = /dsh gateway:\s+(http:\/\/127\.0\.0\.1:\d+)/u.exec(line)
           if (match?.[1] !== undefined) finish(match[1])
         }
       })
