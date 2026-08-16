@@ -293,6 +293,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     const nonce = randomBytes(18).toString('base64')
     const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'chat.js'))
     const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'chat.css'))
+    const responsiveStyle = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'chat-responsive.css'))
     const logo = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'deepseek-harness.png'))
     const messages = localizeWebviewMessages((message) => vscode.l10n.t(message))
     const text = (key: WebviewMessageKey): string => escapeHtml(messages[key])
@@ -333,6 +334,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     }
   </style>
   <link rel="stylesheet" href="${style}">
+  <link rel="stylesheet" href="${responsiveStyle}">
   <title>DeepSeek Harness</title>
 </head>
 <body>

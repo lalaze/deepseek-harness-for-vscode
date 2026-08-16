@@ -1,0 +1,335 @@
+/*
+ * Responsive layout contract for the native workbench.
+ *
+ * Keep viewport adaptation out of component styling in chat.css. VS Code can
+ * resize a webview to widths that are much smaller than a normal editor tab,
+ * so every grid/flex boundary must be allowed to shrink below its content's
+ * intrinsic width before the breakpoint-specific layout is applied.
+ */
+
+html,
+body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.shell-header,
+.brand-row,
+.brand,
+.key-banner,
+.workbench,
+.chat,
+.conversation,
+.messages,
+.message-body,
+.details,
+.detail-content,
+.interactions,
+.interaction-card,
+.composer-shell,
+.composer-bar,
+.composer-tools,
+.composer-meta,
+.composer-actions,
+.configuration-panel,
+.settings-card,
+.plugin-panel,
+.plugin-panel-view {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.brand {
+  overflow: hidden;
+}
+
+.brand strong,
+.key-banner span,
+.interaction-card p,
+.settings-header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tool-card summary,
+.context-card summary,
+.plan-mode-row,
+.settings-test-row,
+.settings-url-row,
+.settings-footer,
+.interaction-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.detail-tabs {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.detail-tabs button {
+  min-width: max-content;
+}
+
+.question-option,
+.job-row,
+.subagent-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.command-menu-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.configuration-panel {
+  max-width: calc(100vw - 16px);
+}
+
+.settings-panel {
+  min-width: 0;
+}
+
+/* The single-row composer needs roughly 600 px with English labels. Switch
+ * before its intrinsic controls can become wider than the side bar. */
+@media (max-width: 680px) {
+  .composer-bar {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      'tools tools'
+      'meta actions';
+  }
+
+  .composer-tools {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .composer-meta {
+    justify-content: flex-start;
+  }
+
+  .composer-status {
+    text-align: left;
+  }
+
+  .permission-select {
+    width: min(138px, 40vw);
+    min-width: min(116px, 100%);
+  }
+
+  .key-banner {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .composer-shell {
+    margin-inline: 5px;
+  }
+
+  .composer-bar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'tools'
+      'meta'
+      'actions';
+    row-gap: 3px;
+  }
+
+  .composer-actions {
+    width: 100%;
+  }
+
+  .configuration-toggle {
+    flex: 1 1 auto;
+    max-width: calc(100% - 36px);
+  }
+
+  .permission-select {
+    width: auto;
+    min-width: 88px;
+    max-width: 116px;
+    flex: 1 1 88px;
+  }
+
+  .plugin-filter-row,
+  .plugin-custom-form > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #attach-selection,
+  #timeline-toggle,
+  #details-toggle {
+    width: 28px;
+    padding: 0;
+    overflow: hidden;
+    flex: none;
+    font-size: 0;
+    white-space: nowrap;
+  }
+
+  #attach-selection::before { content: '⮒'; font-size: 14px; }
+  #timeline-toggle::before { content: '◷'; font-size: 14px; }
+  #details-toggle::before { content: '⋯'; font-size: 16px; }
+
+  .context-meter-value,
+  .configuration-source-switch > span {
+    display: none;
+  }
+
+  .conversation {
+    padding-inline: 7px;
+  }
+
+  .message.user .message-body {
+    max-width: 94%;
+  }
+
+  .settings-panel {
+    padding: 7px;
+  }
+
+  .settings-card {
+    max-height: calc(100% - 14px);
+  }
+}
+
+@media (max-width: 320px) {
+  .shell-header {
+    padding-inline: 6px;
+  }
+
+  .brand strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .configuration-panel {
+    max-height: min(72vh, 470px);
+  }
+
+  .configuration-model-group .configuration-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .effort-main {
+    display: grid;
+    gap: 3px;
+  }
+
+  .effort-heading {
+    min-width: 0;
+    padding-top: 0;
+  }
+
+  .effort-slider-row {
+    width: 100%;
+  }
+
+  .configuration-toggle {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .configuration-toggle-icon,
+  #configuration-toggle-mode {
+    display: none;
+  }
+
+  .plugin-card-heading {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 260px) {
+  .connection,
+  .composer-status,
+  .composer-hint {
+    display: none;
+  }
+
+  .configuration-toggle-copy strong {
+    font-size: 10px;
+  }
+
+  .key-banner button,
+  .settings-footer button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-height: 520px) {
+  .configuration-panel {
+    max-height: 76vh;
+  }
+
+  .details {
+    max-height: 44vh;
+  }
+
+  .empty-state {
+    min-height: 140px;
+  }
+}
+
+/* Chat area, bubbles, tool cards and reasoning cards must shrink with the
+ * viewport instead of forcing a horizontal scrollbar. */
+.message,
+.message-body,
+.tool-item,
+.tool-card,
+.reasoning-block,
+.content-block,
+.markdown-body,
+.timeline-panel,
+.command-menu,
+.file-mention-menu {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.message {
+  width: 100%;
+}
+
+.message-body,
+.tool-detail,
+.reasoning-content,
+.timeline-entry-snippet,
+.command-desc,
+.tool-preview {
+  overflow-wrap: anywhere;
+}
+
+.tool-card summary,
+.context-card summary {
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+
+.tool-title,
+.tool-preview,
+.reasoning-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 680px) {
+  .conversation {
+    padding-inline: 8px;
+  }
+
+  .message-body {
+    max-width: 100%;
+  }
+
+  .tool-detail {
+    max-width: 100%;
+  }
+}
