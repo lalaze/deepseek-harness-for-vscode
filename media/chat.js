@@ -979,7 +979,10 @@ function renderComposer(active) {
 
 /** Claude-style running status line with an interrupt hint. */
 function renderActivityStatus(active) {
-  elements.activityStatus.classList.toggle('hidden', active?.running !== true)
+  // The host only flips `running` for LLM turns; host commands such as
+  // /compact surface as a notice item that stays `running` until command/done.
+  const commandRunning = (active?.messages ?? []).some((item) => item.kind === 'notice' && item.status === 'running')
+  elements.activityStatus.classList.toggle('hidden', active?.running !== true && !commandRunning)
 }
 
 function updateCommandMenu() {
