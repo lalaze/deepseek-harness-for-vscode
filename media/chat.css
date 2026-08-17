@@ -1019,3 +1019,20 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground, rgba(127, 127, 127, .6)); border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground, rgba(127, 127, 127, .7)); border: 2px solid transparent; background-clip: padding-box; }
+
+/* Phase 0: session export + compact */
+.compact-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.compact-button:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }

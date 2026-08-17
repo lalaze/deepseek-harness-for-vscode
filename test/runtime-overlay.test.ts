@@ -14,6 +14,7 @@ describe('Harness Web profile overlay', () => {
       agentPreset: 'code',
       provider: 'packycode',
       permissionMode: 'workspace-write',
+      webSearch: true,
       autoAttachSelection: true,
     }, '/extension/dist/runtime/gateway-runtime.mjs')
     expect(overlay).toContain('id: web-runtime')
@@ -26,6 +27,24 @@ describe('Harness Web profile overlay', () => {
     expect(overlay).toContain('default: code')
     expect(overlay).toContain('defaultPreset: workspace-write')
     expect(overlay).not.toContain('llm-pi-ai')
+    expect(overlay).not.toContain('web-search-deepseek')
+    expect(() => load(overlay)).not.toThrow()
+  })
+
+  it('disables the web-search provider when webSearch is off', () => {
+    const overlay = renderOverlay({
+      model: 'deepseek-v4-flash',
+      reasoningEffort: 'high',
+      agentPreset: 'standard',
+      provider: 'deepseek-official',
+      permissionMode: 'workspace-write',
+      webSearch: false,
+      autoAttachSelection: true,
+    }, '/extension/dist/runtime/gateway-runtime.mjs')
+    const rows = load(overlay) as Array<{ id?: string; disabled?: boolean }>
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'web-search-deepseek', disabled: true }),
+    ]))
     expect(() => load(overlay)).not.toThrow()
   })
 
@@ -36,6 +55,7 @@ describe('Harness Web profile overlay', () => {
       agentPreset: 'standard',
       provider: 'custom: route',
       permissionMode: 'read-only',
+      webSearch: true,
       autoAttachSelection: false,
     }, 'C:\\Extensions\\DeepSeek Harness\\gateway-runtime.mjs')
     expect(overlay).toContain('thinking: disabled')

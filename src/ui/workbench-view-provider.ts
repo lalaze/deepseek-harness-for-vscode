@@ -322,6 +322,36 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'answerQuestions':
         await this.gateway.answerQuestions(requiredString(value, 'key'), questionAnswers(value.answers))
         break
+      case 'exportSession': {
+        const sessionId = optionalString(value.sessionId)
+        const exportId = sessionId === undefined ? (await this.gateway.snapshot()).active?.id : sessionId
+        if (exportId === undefined) throw new Error(vscode.l10n.t('Create or select a session first.'))
+        const filename = exportFilename(exportId)
+        // Ask for the destination before downloading so a cancelled dialog
+        // does not waste a potentially large ZIP transfer. Uri.file needs an
+        // absolute path, so anchor the default name in the workspace folder.
+        const defaultFolder = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(process.cwd())
+        const target = await vscode.window.showSaveDialog({
+          title: vscode.l10n.t('Export Harness session'),
+          defaultUri: vscode.Uri.joinPath(defaultFolder, filename),
+          filters: { 'ZIP archive': ['zip'] },
+        })
+        if (target === undefined) break
+        const bytes = await this.gateway.exportSession(exportId, value.includeDescendants !== false)
+        await vscode.workspace.fs.writeFile(target, bytes)
+        void vscode.window.showInformationMessage(vscode.l10n.t('Session exported: {0}', target.fsPath))
+        break
+      }
+      case 'compact': {
+        // The command catalog can lag a freshly opened session; refresh it so
+        // the availability check is against the live registration.
+        await this.gateway.refreshCommands()
+        if (!this.gateway.hasHostCommand('compact')) {
+          throw new Error(vscode.l10n.t('Compact is not available for this session.'))
+        }
+        await this.gateway.prompt('/compact')
+        break
+      }
     }
   }
 
@@ -395,6 +425,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <button id="back-parent" class="icon-button compact hidden" title="${text('backToParentAgent')}" aria-label="${text('backToParentAgent')}">←</button>
       <button id="session-title" class="title-button" title="${text('renameConversation')}">${text('newConversation')}</button>
       <button id="fork" class="icon-button compact" title="${text('forkConversation')}" aria-label="${text('forkConversation')}">⑂</button>
+      <button id="export-session" class="icon-button compact" title="${text('exportSession')}" aria-label="${text('exportSession')}">⤓</button>
     </div>
   </header>
 
@@ -534,6 +565,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
               <span class="context-meter-ring" aria-hidden="true"></span>
               <span id="context-meter-value" class="context-meter-value"></span>
             </span>
+            <button id="compact" class="compact-button" type="button" title="${text('compact')}">⇅ <span>${text('compact')}</span></button>
           </div>
           <div class="composer-actions">
             <button id="configuration-toggle" class="configuration-toggle" type="button" title="${text('configurationOpen')}" aria-label="${text('configurationOpen')}" aria-expanded="false" aria-controls="configuration-panel" disabled>
@@ -635,6 +667,11 @@ function requiredString(value: Record<string, unknown>, key: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+/** Stable, cross-platform ZIP name for a session log export. */
+function exportFilename(sessionId: string): string {
+  return `dsh-session-${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_')}.zip`
 }
 
 function optionalHttpUrl(value: unknown): string | undefined {

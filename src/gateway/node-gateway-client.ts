@@ -54,6 +54,19 @@ export class NodeGatewayClient extends AbstractApiClient {
     })
   }
 
+  /** Downloads the session log ZIP (with descendant sessions) served by the Gateway. */
+  async exportSession(sessionId: string, includeDescendants = true): Promise<Uint8Array> {
+    const url = new URL('/api/session.export', this.baseUrl)
+    url.searchParams.set('sessionId', sessionId)
+    url.searchParams.set('includeDescendants', String(includeDescendants))
+    const response = await globalThis.fetch(url)
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Export failed: HTTP ${response.status}${detail === '' ? '' : ` ${detail}`}`)
+    }
+    return new Uint8Array(await response.arrayBuffer())
+  }
+
   /**
    * Generic unary call for endpoints outside the typed RpcMethodMap (the host
    * commands service is a typert remote, not part of the api-proxy contract).

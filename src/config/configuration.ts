@@ -30,6 +30,8 @@ export interface HarnessConfiguration {
   readonly agentPreset: AgentPresetId
   readonly provider: string
   readonly permissionMode: PermissionMode
+  /** Whether the built-in DeepSeek web-search provider stays enabled. */
+  readonly webSearch: boolean
   /** Auto-attach the active editor selection as context when sending. */
   readonly autoAttachSelection: boolean
 }
@@ -58,6 +60,7 @@ export class ConfigurationService implements vscode.Disposable {
       agentPreset: agentPresetId(config.get<string>('agentPreset')),
       provider: nonEmpty(config.get<string>('provider'), 'deepseek-official'),
       permissionMode: permissionMode(config.get<string>('permissionMode')),
+      webSearch: config.get<boolean>('webSearch', true),
       autoAttachSelection: config.get<boolean>('autoAttachSelection', true),
     }
   }
@@ -166,6 +169,7 @@ const RUNTIME_SETTING_KEYS = [
   'deepseekHarness.agentPreset',
   'deepseekHarness.provider',
   'deepseekHarness.permissionMode',
+  'deepseekHarness.webSearch',
 ] as const
 
 function nonEmpty(value: string | undefined, fallback: string): string {

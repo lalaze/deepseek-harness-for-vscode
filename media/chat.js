@@ -28,6 +28,7 @@ const elements = {
   sessionTitle: byId('session-title'),
   backParent: byId('back-parent'),
   fork: byId('fork'),
+  exportSession: byId('export-session'),
   permission: byId('permission'),
   keyBanner: byId('key-banner'),
   setApiKey: byId('set-api-key'),
@@ -64,6 +65,7 @@ const elements = {
   composerStatus: byId('composer-status'),
   activityStatus: byId('activity-status'),
   activityElapsed: byId('activity-elapsed'),
+  compact: byId('compact'),
 }
 
 let payload
@@ -211,6 +213,8 @@ elements.fork.addEventListener('click', () => {
   clearPastedImages()
   post('fork')
 })
+elements.exportSession.addEventListener('click', () => post('exportSession'))
+elements.compact.addEventListener('click', () => post('compact'))
 elements.setApiKey.addEventListener('click', () => post('setApiKey'))
 elements.openSettings.addEventListener('click', () => connectionSettings.open())
 elements.retry.addEventListener('click', () => post('retry'))
