@@ -1039,17 +1039,17 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   .composer-status { display: none; }
 }
 
-/* Slim scrollbars that follow the VS Code theme instead of the OS default. */
-::-webkit-scrollbar { width: 10px; height: 10px; }
+/* Slim overlay-style scrollbars that follow the VS Code theme instead of the
+   OS default. On macOS Chromium renders native overlay scrollbars anyway; on
+   Windows this keeps the bar thin and pill-shaped so it reads like macOS. */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--vscode-scrollbarSlider-background, rgba(127, 127, 127, .4));
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background-clip: padding-box;
+  border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground, rgba(127, 127, 127, .6)); border: 2px solid transparent; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground, rgba(127, 127, 127, .7)); border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground, rgba(127, 127, 127, .6)); }
+::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground, rgba(127, 127, 127, .7)); }
 
 /* Phase 0: session export + compact */
 .compact-button {
