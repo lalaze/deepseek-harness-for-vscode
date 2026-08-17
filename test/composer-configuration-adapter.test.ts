@@ -161,6 +161,7 @@ function payload(
     todos: [],
     skills: [],
     jobs: [],
+    queue: [],
     approvals: [],
     questions: [],
     subagentCount: 0,

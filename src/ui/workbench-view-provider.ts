@@ -248,6 +248,18 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'cancel':
         await this.gateway.cancel()
         break
+      case 'steerQueued':
+        await this.gateway.steerQueued(requiredString(value, 'itemId'))
+        break
+      case 'removeQueued':
+        await this.gateway.removeQueued(requiredString(value, 'itemId'))
+        break
+      case 'editQueued': {
+        const itemId = requiredString(value, 'itemId')
+        const text = typeof value.text === 'string' ? value.text.trim() : ''
+        if (text !== '') await this.gateway.editQueued(itemId, text)
+        break
+      }
       case 'setPermission':
         await this.gateway.selectPermission(requiredString(value, 'value'))
         break
@@ -550,6 +562,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         <div id="timeline-panel" class="timeline-panel hidden" role="listbox" aria-label="${text('timeline')}"></div>
         <div id="file-mention-menu" class="file-mention-menu hidden" role="listbox" aria-label="${text('workspaceFiles')}"></div>
         <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="${text('slashCommands')}"></div>
+        <div id="queued-panel" class="queued-panel hidden" aria-label="${text('queuedMessages')}"></div>
         <textarea id="prompt" rows="1" placeholder="${text('promptPlaceholder')}" aria-label="${text('message')}"></textarea>
         <div class="composer-bar">
           <div class="composer-tools">

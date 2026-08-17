@@ -65,6 +65,7 @@ const elements = {
   composerStatus: byId('composer-status'),
   activityStatus: byId('activity-status'),
   compact: byId('compact'),
+  queuedPanel: byId('queued-panel'),
 }
 
 let payload
@@ -77,6 +78,7 @@ let searchResults = []
 let searchTimer
 let menuState = null
 let menuLoadedSession = null
+let queuedEditingId = null
 let selectorSignature = ''
 let interactionSignature = ''
 let detailSignature = ''
@@ -356,6 +358,7 @@ function render() {
   if (!elements.details.classList.contains('hidden')) renderDetails()
   renderComposer(active)
   renderActivityStatus(active)
+  renderQueued(active)
   updateCommandMenu()
   connectionSettings.update(
     payload.connectionSettings ?? { writable: false, providers: [] },
@@ -966,6 +969,7 @@ function renderComposer(active) {
   const ready = payload.state.phase === 'connected' || payload.state.phase === 'reconnecting'
   elements.prompt.disabled = !ready
   if (active?.subagentMode === 'one-shot') elements.prompt.disabled = true
+  elements.prompt.placeholder = active?.running ? t('queuedPromptPlaceholder') : t('promptPlaceholder')
   elements.send.disabled = !ready || (!active?.running && elements.prompt.value.trim() === '' && pastedImages.length === 0)
   elements.send.textContent = active?.running ? '■' : '↑'
   elements.send.title = active?.running ? t('stopGenerating') : t('sendTitle')
@@ -983,6 +987,76 @@ function renderActivityStatus(active) {
   // /compact surface as a notice item that stays `running` until command/done.
   const commandRunning = (active?.messages ?? []).some((item) => item.kind === 'notice' && item.status === 'running')
   elements.activityStatus.classList.toggle('hidden', active?.running !== true && !commandRunning)
+}
+
+/** QueueDock: prompts the user queued while a turn was running. */
+function renderQueued(active) {
+  const queue = (active?.queue ?? []).filter((item) => item.placement === 'queued')
+  elements.queuedPanel.classList.toggle('hidden', queue.length === 0)
+  elements.queuedPanel.textContent = ''
+  if (queue.length === 0) {
+    queuedEditingId = null
+    return
+  }
+  elements.queuedPanel.append(node('div', 'queued-title', t('queuedMessages')))
+  for (const item of queue) {
+    elements.queuedPanel.append(queuedEditingId === item.id ? queuedEditRow(item) : queuedItemRow(item))
+  }
+}
+
+function queuedItemRow(item) {
+  const row = node('div', 'queued-item')
+  const text = item.text || (item.hasMedia ? '(media)' : '')
+  row.append(node('span', 'queued-text', text))
+  const actions = node('span', 'queued-actions')
+  const steer = node('button', 'queued-action', '⚡')
+  steer.title = t('sendNow')
+  steer.setAttribute('aria-label', t('sendNow'))
+  steer.addEventListener('click', () => post('steerQueued', { itemId: item.id }))
+  const edit = node('button', 'queued-action', '✎')
+  edit.title = t('editQueued')
+  edit.setAttribute('aria-label', t('editQueued'))
+  edit.addEventListener('click', () => {
+    queuedEditingId = item.id
+    renderQueued(payload?.state?.active)
+  })
+  const remove = node('button', 'queued-action', '✕')
+  remove.title = t('removeQueued')
+  remove.setAttribute('aria-label', t('removeQueued'))
+  remove.addEventListener('click', () => post('removeQueued', { itemId: item.id }))
+  actions.append(steer, edit, remove)
+  row.append(actions)
+  return row
+}
+
+function queuedEditRow(item) {
+  const row = node('div', 'queued-item')
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.className = 'queued-edit-input'
+  input.value = item.text
+  input.setAttribute('aria-label', t('editQueued'))
+  const save = node('button', 'queued-action', '✓')
+  save.title = t('save')
+  save.addEventListener('click', () => {
+    const text = input.value.trim()
+    queuedEditingId = null
+    renderQueued(payload?.state?.active)
+    if (text !== '') post('editQueued', { itemId: item.id, text })
+  })
+  const cancel = node('button', 'queued-action', '✕')
+  cancel.title = t('cancel')
+  cancel.addEventListener('click', () => {
+    queuedEditingId = null
+    renderQueued(payload?.state?.active)
+  })
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.isComposing) save.click()
+    if (event.key === 'Escape') cancel.click()
+  })
+  row.append(input, save, cancel)
+  requestAnimationFrame(() => input.focus())
+  return row
 }
 
 function updateCommandMenu() {

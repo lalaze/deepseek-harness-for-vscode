@@ -99,6 +99,7 @@ export interface ActiveSessionView {
   readonly todos: readonly { readonly content: string; readonly status: string }[]
   readonly skills: readonly SkillEntry[]
   readonly jobs: readonly JobView[]
+  readonly queue: readonly QueuedPromptView[]
   readonly approvals: readonly PendingApprovalView[]
   readonly questions: readonly PendingQuestionView[]
   readonly subagentCount: number
@@ -111,6 +112,18 @@ export interface ActiveSessionView {
   readonly goal?: GoalView
   readonly tokenUsage?: TokenUsageView
   readonly contextPressure?: ContextPressureView
+}
+
+/**
+ * One still-pending composer prompt. Queued items are not durable session
+ * events — the authoritative `session/queue` snapshot drives this list, and
+ * `placement` decides where each item renders (QueueDock vs conversation tail).
+ */
+export interface QueuedPromptView {
+  readonly id: string
+  readonly placement: 'queued' | 'steering' | 'context'
+  readonly text: string
+  readonly hasMedia: boolean
 }
 
 export type SubagentView = {

@@ -5,7 +5,9 @@ import type {
   HostFrame,
   IApiClient,
   JobView,
+  MessageId,
   MuxFrame,
+  QueuedInboxItem,
   RpcId,
   RpcResponse,
   SessionId,
@@ -36,6 +38,7 @@ import {
   type HarnessWorkbenchState,
   type PendingApprovalView,
   type PendingQuestionView,
+  type QueuedPromptView,
   type SubagentView,
   type WorkbenchLabels,
 } from '../domain/workbench-state.js'
@@ -70,6 +73,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private presets: readonly AgentPresetEntry[] = []
   private skills: readonly SkillEntry[] = []
   private jobs: readonly JobView[] = []
+  private queue: readonly QueuedInboxItem[] = []
   private approvals = new Map<string, PendingApprovalRecord>()
   private questions = new Map<string, PendingQuestionRecord>()
   private subagentCount = 0
@@ -180,6 +184,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       todos: projected.todos,
       skills: this.skills,
       jobs: this.jobs,
+      queue: this.queue.map(queuedPromptView),
       approvals: [...this.approvals.values()].map(stripApprovalTransport),
       questions: [...this.questions.values()].map(stripQuestionTransport),
       subagentCount: this.subagentCount,
@@ -284,6 +289,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.models = undefined
     this.skills = []
     this.jobs = []
+    this.queue = []
     this.approvals.clear()
     this.questions.clear()
     this.subagentCount = 0
@@ -413,6 +419,39 @@ export class HarnessGatewayService implements vscode.Disposable {
     }
   }
 
+  /**
+   * Promotes one still-pending queued prompt into the current turn, so it is
+   * answered immediately instead of after the running turn completes.
+   */
+  async steerQueued(itemId: string): Promise<void> {
+    const sessionId = this.requireActiveSession()
+    valueOf(await this.requireClient().sessions.updateQueue({
+      sessionId: sessionId as SessionId,
+      itemId: itemId as MessageId,
+      action: { kind: 'steer' },
+    }))
+  }
+
+  /** Withdraws one still-pending queued prompt before the agent claims it. */
+  async removeQueued(itemId: string): Promise<void> {
+    const sessionId = this.requireActiveSession()
+    valueOf(await this.requireClient().sessions.updateQueue({
+      sessionId: sessionId as SessionId,
+      itemId: itemId as MessageId,
+      action: { kind: 'remove' },
+    }))
+  }
+
+  /** Rewrites the text of one still-pending queued prompt. */
+  async editQueued(itemId: string, text: string): Promise<void> {
+    const sessionId = this.requireActiveSession()
+    valueOf(await this.requireClient().sessions.updateQueue({
+      sessionId: sessionId as SessionId,
+      itemId: itemId as MessageId,
+      action: { kind: 'edit', content: [{ type: 'text', text }] },
+    }))
+  }
+
   async cancel(): Promise<void> {
     const sessionId = this.requireActiveSession()
     if (this.subagentAddress === undefined) {
@@ -438,6 +477,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.models = undefined
     this.skills = []
     this.jobs = []
+    this.queue = []
     this.subagents = list.entries
     this.subagentCount = list.entries.length
     this.projections = recordValue(history.projections?.values)
@@ -680,6 +720,8 @@ export class HarnessGatewayService implements vscode.Disposable {
       this.questions.delete(`question:${String(frame.questionRpcId)}`)
     } else if (frame.type === 'session/jobs' && String(frame.sessionId) === this.activeSessionId) {
       this.jobs = frame.jobs
+    } else if (frame.type === 'session/queue' && String(frame.sessionId) === this.activeSessionId) {
+      this.queue = frame.items
     } else if (frame.type === 'session/projection') {
       if (String(frame.sessionId) === this.activeSessionId) this.projections[frame.key] = frame.value
       if (frame.key === 'title') this.applyTitleProjection(String(frame.sessionId), typeof frame.value === 'string' ? frame.value : undefined)
@@ -913,6 +955,20 @@ function stripApprovalTransport(value: PendingApprovalRecord): PendingApprovalVi
 
 function stripQuestionTransport(value: PendingQuestionRecord): PendingQuestionView {
   return { key: value.key, questions: value.questions }
+}
+
+/** Reduces one pending inbox item to the small, webview-friendly queue view. */
+function queuedPromptView(item: QueuedInboxItem): QueuedPromptView {
+  const text = item.message.content
+    .filter((block): block is { readonly type: 'text'; readonly text: string } => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+  return {
+    id: String(item.id),
+    placement: item.placement,
+    text,
+    hasMedia: item.message.content.some((block) => block.type === 'image'),
+  }
 }
 
 function errorMessage(cause: unknown): string {
