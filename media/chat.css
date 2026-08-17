@@ -360,7 +360,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 @media (prefers-reduced-motion: reduce) {
   .streaming-indicator-dot, .reasoning-block.running .reasoning-dot, .tool-card.running .tool-status, .startup-logo, .startup-dots span, .activity-star, .activity-spout .drop, .activity-spout .stream, .activity-verb { animation: none; }
 }
-.activity-status { padding: 18px 14px 1px; display: flex; align-items: center; gap: 9px; color: var(--vscode-descriptionForeground); font-size: 12px; }
+.activity-status { padding: 22px 14px 4px; display: flex; align-items: center; gap: 9px; color: var(--vscode-descriptionForeground); font-size: 12px; }
 .activity-star { position: relative; display: inline-flex; align-items: center; align-self: center; color: var(--vscode-foreground); line-height: 0; }
 .activity-star svg { display: block; width: 18px; height: 13.5px; }
 .activity-spout { position: absolute; left: 4px; top: 1px; width: 6px; height: 0; pointer-events: none; }
