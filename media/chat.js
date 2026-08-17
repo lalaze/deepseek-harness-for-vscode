@@ -79,6 +79,8 @@ let searchTimer
 let menuState = null
 let menuLoadedSession = null
 let queuedEditingId = null
+let optimisticBubbles = []
+let optimisticSeq = 0
 let selectorSignature = ''
 let interactionSignature = ''
 let detailSignature = ''
@@ -457,9 +459,12 @@ function replaceOptions(select, options, selected) {
 }
 
 function renderMessages(active) {
-  const messages = active?.messages || []
+  const realMessages = active?.messages || []
   const sessionId = active?.id || ''
   const sessionChanged = sessionId !== renderedSessionId
+  if (sessionChanged && optimisticBubbles.length > 0) optimisticBubbles = []
+  reconcileOptimistic(realMessages)
+  const messages = [...realMessages, ...optimisticBubbles]
   const shouldStick = sessionChanged || isNearBottom(elements.conversation)
   const previousTop = elements.conversation.scrollTop
   const previousHeight = elements.conversation.scrollHeight
@@ -522,6 +527,29 @@ function messageText(item) {
     .map((block) => block.text)
     .join('\n')
     .trim()
+}
+
+function messageImageCount(item) {
+  return (item.blocks || []).filter((block) => block.kind === 'image').length
+}
+
+/** Drops optimistic bubbles whose real user/message has now surfaced (FIFO by content). */
+function reconcileOptimistic(realMessages) {
+  if (optimisticBubbles.length === 0) return
+  const matched = new Set()
+  const pending = []
+  for (const bubble of optimisticBubbles) {
+    const index = realMessages.findIndex((message) =>
+      !matched.has(message.id)
+      && message.kind === 'message'
+      && message.role === 'user'
+      && messageText(message) === bubble.text
+      && messageImageCount(message) === bubble.imageCount
+    )
+    if (index === -1) pending.push(bubble)
+    else matched.add(realMessages[index].id)
+  }
+  optimisticBubbles = pending
 }
 
 function latestConclusionId(messages) {
@@ -1334,9 +1362,27 @@ function sendPrompt() {
     ...(configuration === undefined ? {} : { configuration }),
   })
   editorContext.markSubmitted()
+  // Optimistic echo: render the user bubble immediately so the conversation
+  // does not sit empty while the harness admits the prompt and starts the
+  // turn. Queued follow-ups (turn already running) stay in the QueueDock.
+  if (!payload?.state?.active?.running) {
+    optimisticBubbles.push({
+      id: `optimistic-${++optimisticSeq}`,
+      kind: 'message',
+      role: 'user',
+      time: Date.now(),
+      text,
+      imageCount: pastedImages.length,
+      blocks: [
+        ...(text === '' ? [] : [{ kind: 'text', text }]),
+        ...pastedImages.map(() => ({ kind: 'image', text: t('imageAttachment') })),
+      ],
+    })
+  }
   elements.prompt.value = ''
   clearPastedImages()
   resizePrompt()
+  if (optimisticBubbles.length > 0) renderMessages(payload?.state?.active)
 }
 
 function resizePrompt() {
