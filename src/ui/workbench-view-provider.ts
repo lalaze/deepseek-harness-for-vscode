@@ -112,6 +112,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       if (this.panel === panel) this.panel = undefined
     })
     this.panel = panel
+    void this.gateway.start()
     void this.publishState().catch(() => undefined)
     void this.publishEditorSelection()
   }
