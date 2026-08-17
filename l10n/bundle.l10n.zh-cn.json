@@ -183,6 +183,7 @@
   "Think": "思考",
   "Thinking…": "正在推理…",
   "Thought for {duration}": "思考了 {duration}",
+  "Thought for {duration} · {tokens} tokens": "思考了 {duration} · {tokens} tokens",
   "Worked for {duration}": "工作了 {duration}",
   "Agent": "Agent",
   "Configure an API Key in Connection settings first.": "请先在“连接设置”中配置 API Key。",

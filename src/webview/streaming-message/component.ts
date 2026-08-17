@@ -18,8 +18,8 @@ export class StreamingMessageComponent {
     readonly document: Document
     readonly reasoningLabel: () => string
     readonly thinkingLabel: () => string
-    /** "Thought for 12s" style label once a reasoning block has known timing. */
-    readonly reasoningDoneLabel: (elapsedMs: number) => string
+    /** "Thought for 12s · 342 tokens" style label once a reasoning block has known timing. */
+    readonly reasoningDoneLabel: (elapsedMs: number, tokens?: number) => string
     readonly renderMarkdown: (target: HTMLElement, source: string) => void
     readonly onStreamFrame: () => void
   }) {}
@@ -174,7 +174,7 @@ export class StreamingMessageComponent {
     if (running) return this.options.thinkingLabel()
     if (block?.duration !== undefined) {
       const elapsed = Math.max(0, (block.duration.endedAt ?? Date.now()) - block.duration.startedAt)
-      return this.options.reasoningDoneLabel(elapsed)
+      return this.options.reasoningDoneLabel(elapsed, block.reasoningTokens)
     }
     return this.options.reasoningLabel()
   }

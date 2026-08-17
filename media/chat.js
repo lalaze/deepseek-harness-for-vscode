@@ -129,7 +129,9 @@ const streamingMessage = new StreamingMessageComponent({
   document,
   reasoningLabel: () => t('reasoningProcess'),
   thinkingLabel: () => t('thinking'),
-  reasoningDoneLabel: (elapsed) => t('thoughtFor', { duration: formatWorkDuration(elapsed) }),
+  reasoningDoneLabel: (elapsed, tokens) => tokens === undefined
+    ? t('thoughtFor', { duration: formatWorkDuration(elapsed) })
+    : t('thoughtForWithTokens', { duration: formatWorkDuration(elapsed), tokens: formatTokenCount(tokens) }),
   renderMarkdown: (target, source) => renderMarkdown(target, source, markdownActions),
   onStreamFrame: () => {
     if (isNearBottom(elements.conversation)) elements.conversation.scrollTop = elements.conversation.scrollHeight
@@ -1347,6 +1349,10 @@ function formatRelativeTime(time) {
   if (delta < 3_600_000) return t('minutesAgo', { count: Math.floor(delta / 60_000) })
   if (delta < 86_400_000) return t('hoursAgo', { count: Math.floor(delta / 3_600_000) })
   return new Date(time).toLocaleDateString()
+}
+
+function formatTokenCount(count) {
+  return Number(count).toLocaleString()
 }
 
 function cssEscape(value) {

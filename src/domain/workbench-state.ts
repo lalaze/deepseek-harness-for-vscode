@@ -29,6 +29,8 @@ export interface ChatBlock {
   readonly streaming?: boolean
   /** Wall-clock timing derived from chunk events; only reasoning blocks carry it. */
   readonly duration?: TurnDurationView
+  /** Reasoning tokens reported by the adapter for the step; only reasoning blocks carry it. */
+  readonly reasoningTokens?: number
 }
 
 export interface ChatItem {
@@ -317,6 +319,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   }
   const finalSteps = new Set<string>()
   const blockTimes = new Map<string, Map<number, TurnDurationView>>()
+  const stepUsage = new Map<string, { readonly reasoningTokens?: number }>()
   const partials = new Map<string, PartialBlocks>()
   const commandRuns = new Map<string, {
     readonly seq: number
@@ -335,12 +338,16 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   for (const { event } of entries) {
     if (event.type === 'assistant/message') {
       finalSteps.add(stepKey(event.data.turn, event.data.step))
+      if (event.data.usage !== undefined) stepUsage.set(stepKey(event.data.turn, event.data.step), event.data.usage)
     } else if (event.type === 'assistant/chunk') {
       // Track per-block wall-clock times for every chunk, including chunks of
-      // steps later replaced by a finalized assistant message.
+      // steps later replaced by a finalized assistant message, and capture the
+      // streamed usage record (adapter-reported reasoning tokens) per step.
       const chunk = event.data.chunk
-      if ('index' in chunk && typeof chunk.index === 'number') {
-        const key = stepKey(event.data.turn, event.data.step)
+      const key = stepKey(event.data.turn, event.data.step)
+      if (chunk.type === 'usage') {
+        stepUsage.set(key, chunk.usage)
+      } else if ('index' in chunk && typeof chunk.index === 'number') {
         const times = blockTimes.get(key) ?? new Map<number, TurnDurationView>()
         blockTimes.set(key, times)
         if (chunk.type === 'block-end') {
@@ -393,8 +400,10 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
       }
       case 'assistant/message': {
         if (isReplacement(event.surfaceOp)) break
-        const times = blockTimes.get(stepKey(event.data.turn, event.data.step))
-        const blocks = projectTimedBlocks(event.data.message.content, times, labels)
+        const key = stepKey(event.data.turn, event.data.step)
+        const times = blockTimes.get(key)
+        const usage = stepUsage.get(key)
+        const blocks = projectTimedBlocks(event.data.message.content, times, usage, labels)
         if (blocks.length > 0) {
           addMessage({
             id: `event-${event.seq}`,
@@ -546,6 +555,7 @@ class PartialBlocks {
   readonly time: number
   private readonly values = new Map<number, ChatBlock>()
   private readonly times = new Map<number, TurnDurationView>()
+  private usage: { readonly reasoningTokens?: number } | undefined
 
   constructor(seq: number, time: number, private readonly labels: WorkbenchLabels) {
     this.seq = seq
@@ -568,6 +578,9 @@ class PartialBlocks {
         this.append(chunk.index, 'reasoning', chunk.text)
         this.markStarted(chunk.index, time)
         break
+      case 'usage':
+        this.usage = chunk.usage
+        break
       case 'block-end': {
         const blocks = projectBlocks([chunk.block], this.labels)
         const block = blocks[0]
@@ -581,9 +594,24 @@ class PartialBlocks {
   }
 
   blocks(): ChatBlock[] {
-    return [...this.values.entries()].sort(([a], [b]) => a - b).map(([index, value]) => {
+    const entries = [...this.values.entries()].sort(([a], [b]) => a - b)
+    // The step's adapter-reported reasoning tokens cover the whole step, so
+    // attach them to the final reasoning block where the count is complete.
+    let lastReasoningIndex = -1
+    for (const [index, value] of entries) {
+      if (value.kind === 'reasoning') lastReasoningIndex = index
+    }
+    return entries.map(([index, value]) => {
       const time = value.kind === 'reasoning' ? this.times.get(index) : undefined
-      return time === undefined ? value : { ...value, duration: time }
+      const tokens = value.kind === 'reasoning' && index === lastReasoningIndex
+        ? this.usage?.reasoningTokens
+        : undefined
+      if (time === undefined && tokens === undefined) return value
+      return {
+        ...value,
+        ...(time === undefined ? {} : { duration: time }),
+        ...(tokens === undefined ? {} : { reasoningTokens: tokens }),
+      }
     })
   }
 
@@ -597,10 +625,11 @@ class PartialBlocks {
   }
 }
 
-/** Like projectBlocks, attaching chunk timing to reasoning blocks by content index. */
+/** Like projectBlocks, attaching chunk timing and usage to reasoning blocks by content index. */
 function projectTimedBlocks(
   content: readonly unknown[],
   times: ReadonlyMap<number, TurnDurationView> | undefined,
+  usage: { readonly reasoningTokens?: number } | undefined,
   labels: WorkbenchLabels,
 ): ChatBlock[] {
   const result: ChatBlock[] = []
@@ -608,7 +637,16 @@ function projectTimedBlocks(
     const block = projectBlocks([value], labels)[0]
     if (block === undefined) return
     const time = block.kind === 'reasoning' ? times?.get(index) : undefined
-    result.push(time === undefined ? block : { ...block, duration: time })
+    const tokens = block.kind === 'reasoning' ? usage?.reasoningTokens : undefined
+    if (time === undefined && tokens === undefined) {
+      result.push(block)
+      return
+    }
+    result.push({
+      ...block,
+      ...(time === undefined ? {} : { duration: time }),
+      ...(tokens === undefined ? {} : { reasoningTokens: tokens }),
+    })
   })
   return result
 }

@@ -126,6 +126,53 @@ describe('projectConversation', () => {
     ])
   })
 
+  it('attaches streamed usage reasoning tokens to the live reasoning block', () => {
+    const entries = [
+      entry(0, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'reasoning' } }),
+      entry(1, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 0, text: '先分析' } }),
+      entry(2, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '先分析' } },
+      }),
+      entry(3, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'usage', usage: { inputTokens: 100, outputTokens: 50, reasoningTokens: 42 } },
+      }),
+    ] as HistoryEntry[]
+
+    expect(projectConversation(entries).messages[0]?.blocks).toEqual([
+      { kind: 'reasoning', text: '先分析', duration: { startedAt: 1, endedAt: 3 }, reasoningTokens: 42 },
+    ])
+  })
+
+  it('prefers the finalized message usage over the streamed usage record', () => {
+    const entries = [
+      entry(0, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'reasoning' } }),
+      entry(1, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 0, text: '先分析' } }),
+      entry(2, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'usage', usage: { inputTokens: 100, outputTokens: 50, reasoningTokens: 42 } },
+      }),
+      entry(3, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '先分析' } },
+      }),
+      entry(4, 'assistant/message', {
+        turn: 1, step: 1,
+        usage: { inputTokens: 120, outputTokens: 60, reasoningTokens: 77 },
+        message: {
+          id: 'a1', role: 'assistant', source: { kind: 'model', provider: 'p', model: 'm' },
+          content: [{ type: 'reasoning', text: '先分析' }, { type: 'text', text: '结论' }],
+        },
+      }, 'append'),
+    ] as HistoryEntry[]
+
+    expect(projectConversation(entries).messages[0]?.blocks).toEqual([
+      { kind: 'reasoning', text: '先分析', duration: { startedAt: 1, endedAt: 4 }, reasoningTokens: 77 },
+      { kind: 'text', text: '结论' },
+    ])
+  })
+
   it('shows one cumulative turn duration on the last assistant message', () => {
     const entries = [
       timedEntry(0, 1_000, 'turn/start', { turn: 1 }),

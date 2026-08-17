@@ -134,6 +134,7 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   reasoningProcess: 'Think',
   thinking: 'Thinking…',
   thoughtFor: 'Thought for {duration}',
+  thoughtForWithTokens: 'Thought for {duration} · {tokens} tokens',
   workedFor: 'Worked for {duration}',
   tool: 'Tool',
   approvalRequired: 'Approval required: {tool}',
