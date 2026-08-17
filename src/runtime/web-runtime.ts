@@ -105,7 +105,14 @@ export class HarnessHostRuntime implements vscode.Disposable {
       { cwd: workspace, model: configuration.model, reasoning: configuration.reasoningEffort, preset: configuration.agentPreset },
     ))
 
-    const child = spawn(launch.command, args, { cwd: workspace, env, windowsHide: true })
+    // Spawn from the harness home, not the workspace: dsh boot reads
+    // `cwd/.env` as the project layer and refuses bootstrap-only variables
+    // (DEEPSEEK_BASE_URL, DSH_*, XDG_*, proxy vars, ...) declared there. A
+    // workspace .env often carries such a var for unrelated tooling, which
+    // made the Gateway refuse to boot. The harness still operates in the
+    // workspace through DSH_CWD (agent cwd) — process cwd only drives .env
+    // and profile/config discovery, both of which live under DSH_HOME.
+    const child = spawn(launch.command, args, { cwd: home, env, windowsHide: true })
     this.child = child
     child.stderr.on('data', (chunk: Buffer | string) => this.output.append(String(chunk)))
 
