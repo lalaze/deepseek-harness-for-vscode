@@ -360,7 +360,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 @media (prefers-reduced-motion: reduce) {
   .streaming-indicator-dot, .reasoning-block.running .reasoning-dot, .tool-card.running .tool-status, .startup-logo, .startup-dots span, .activity-star, .activity-spout .drop, .activity-spout .stream, .activity-verb { animation: none; }
 }
-.activity-status { padding: 0 14px 5px; display: flex; align-items: baseline; gap: 7px; color: var(--vscode-descriptionForeground); font-size: 10px; }
+.activity-status { padding: 10px 14px 1px; display: flex; align-items: baseline; gap: 7px; color: var(--vscode-descriptionForeground); font-size: 10px; }
 .activity-star { position: relative; display: inline-flex; align-items: center; align-self: center; color: var(--vscode-foreground); line-height: 0; }
 .activity-star svg { display: block; }
 .activity-spout { position: absolute; left: 3px; top: 1px; width: 6px; height: 0; pointer-events: none; }
@@ -590,7 +590,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .question-option small { grid-column: 2; color: var(--vscode-descriptionForeground); }
 .custom-answer { width: 100%; padding: 5px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); }
 
-.composer-shell { margin: 4px 6px 0; overflow: visible; background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-widget-border)); border-radius: 12px; box-shadow: 0 2px 8px color-mix(in srgb, #000 8%, transparent); position: relative; }
+.composer-shell { margin: 3px 6px 0; overflow: visible; background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-widget-border)); border-radius: 12px; box-shadow: 0 2px 8px color-mix(in srgb, #000 8%, transparent); position: relative; }
 .composer-shell:focus-within { border-color: var(--vscode-focusBorder); }
 .configuration-panel {
   position: absolute;
