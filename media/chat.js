@@ -470,6 +470,7 @@ function renderMessages(active) {
   const previousHeight = elements.conversation.scrollHeight
   const previousFirstId = elements.messages.firstElementChild?.dataset.messageId
   const conclusionId = latestConclusionId(messages)
+  const running = active?.running ?? false
   const existing = new Map([...elements.messages.children].map((element) => [element.dataset.messageId, element]))
   const retained = new Set()
   let cursor = elements.messages.firstElementChild
@@ -479,7 +480,7 @@ function renderMessages(active) {
     const signature = messageSignature(item)
     let element = existing.get(id)
     if (!element) {
-      element = renderMessage(item, conclusionId)
+      element = renderMessage(item, conclusionId, running)
       setMessageMetadata(element, id, signature)
     } else if (messageSignatures.get(element) !== signature) {
       if (patchStreamingMessage(element, item)) {
@@ -487,7 +488,7 @@ function renderMessages(active) {
       } else {
         const wasCursor = element === cursor
         const disclosureState = captureDisclosures(element)
-        const replacement = renderMessage(item, conclusionId)
+        const replacement = renderMessage(item, conclusionId, running)
         restoreDisclosures(replacement, disclosureState)
         setMessageMetadata(replacement, id, signature)
         element.replaceWith(replacement)
@@ -503,9 +504,17 @@ function renderMessages(active) {
   for (const [id, element] of existing) {
     if (!retained.has(id)) element.remove()
   }
+  // The copy button and worked-time footer only survive on the finished
+  // conclusion; remove any that are stale (streaming moved on, turn restarted,
+  // or a new conclusion replaced the old one).
   for (const footer of elements.messages.querySelectorAll('.message-copy-footer')) {
     const article = footer.closest('article')
-    if (article?.dataset.messageId !== conclusionId) footer.remove()
+    if (running || article?.dataset.messageId !== conclusionId) footer.remove()
+  }
+  // Keep worked-time footers only under DeepSeek bubbles; remove any that
+  // leaked onto user bubbles.
+  for (const footer of elements.messages.querySelectorAll('article.message:not(.assistant) .work-duration')) {
+    footer.remove()
   }
   elements.empty.classList.toggle('hidden', messages.length > 0)
   const prepended = !sessionChanged && previousFirstId !== undefined
@@ -582,7 +591,7 @@ function createCopyFooter(item) {
   return button
 }
 
-function renderMessage(item, conclusionId) {
+function renderMessage(item, conclusionId, running) {
   if (item.kind === 'tool') return renderTool(item)
   if (item.kind === 'context') return renderContext(item)
   if (item.kind === 'notice') {
@@ -598,10 +607,11 @@ function renderMessage(item, conclusionId) {
   const body = node('div', 'message-body')
   streamingMessage.render(body, item)
   article.append(body)
-  // Always render the footer: while the turn runs it ticks up from turn/start,
-  // and once the turn ends it freezes at the total.
-  workDuration.update(article, item.workDuration)
-  if (item.role === 'assistant' && item.id === conclusionId) article.append(createCopyFooter(item))
+  // Every DeepSeek bubble carries its worked-time footer (it ticks while the
+  // turn runs and freezes when done). The copy button belongs only to the
+  // finished turn's final conclusion.
+  if (item.role === 'assistant') workDuration.update(article, item.workDuration)
+  if (!running && item.role === 'assistant' && item.id === conclusionId) article.append(createCopyFooter(item))
   return article
 }
 
@@ -634,6 +644,10 @@ function renderTool(item) {
     details.append(result)
   }
   container.append(details)
+  // A turn's cumulative worked-time footer lands on the last visible item,
+  // which is often a tool card; show it below the card so it never sits above
+  // the tool call.
+  if (item.workDuration !== undefined) workDuration.update(container, item.workDuration)
   return container
 }
 
@@ -1426,6 +1440,7 @@ function patchStreamingMessage(element, item) {
   const body = element.querySelector('.message-body')
   if (!body) return false
   if (!streamingMessage.patch(body, item)) return false
+  // Keep the ticking worked-time footer under the streaming DeepSeek bubble.
   workDuration.update(element, item.workDuration)
   return true
 }

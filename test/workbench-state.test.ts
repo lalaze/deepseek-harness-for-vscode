@@ -192,7 +192,7 @@ describe('projectConversation', () => {
     ])
   })
 
-  it('shows one cumulative turn duration on the last assistant message', () => {
+  it('shows one cumulative turn duration below the last tool card', () => {
     const entries = [
       timedEntry(0, 1_000, 'turn/start', { turn: 1 }),
       timedEntry(1, 1_200, 'assistant/message', {
@@ -210,9 +210,10 @@ describe('projectConversation', () => {
     ] as HistoryEntry[]
 
     const messages = projectConversation(entries).messages
-    // The cumulative counter lives on the assistant message, not the tool card.
-    expect(messages[0]?.workDuration).toEqual({ startedAt: 1_000, endedAt: 4_600 })
-    expect(messages[1]?.workDuration).toBeUndefined()
+    // The cumulative counter lives on the turn's last visible item (the tool
+    // card), not on the assistant message above it.
+    expect(messages[0]?.workDuration).toBeUndefined()
+    expect(messages[1]?.workDuration).toEqual({ startedAt: 1_000, endedAt: 4_600 })
   })
 
   it('keeps one cumulative turn counter across a multi-step run', () => {
@@ -243,7 +244,8 @@ describe('projectConversation', () => {
 
     const messages = projectConversation(entries).messages
     // The running turn counter starts at turn/start (1_000) on the latest
-    // assistant message; tool cards never carry their own timer.
+    // visible item; here the turn still ends with the assistant message, so
+    // the tool card stays without its own timer.
     expect(messages.find((message) => message.id === 'partial-1:2')?.workDuration)
       .toEqual({ startedAt: 1_000 })
     expect(messages.find((message) => message.id === 'tool-c1')?.workDuration).toBeUndefined()
