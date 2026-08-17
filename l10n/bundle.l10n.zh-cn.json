@@ -5,6 +5,7 @@
   "DeepSeek API Key was saved to the local Harness credential store.": "DeepSeek API Key 已保存到本地 Harness 凭据库。",
   "Clear": "清除",
   "Clear the DeepSeek API Key from the local Harness credential store?": "确定要从本地 Harness 凭据库清除 DeepSeek API Key 吗？",
+  "DeepSeek Harness": "DeepSeek Harness",
   "DeepSeek Harness: {0}": "DeepSeek Harness：{0}",
   "Create Harness Goal": "创建 Harness Goal",
   "Harness will pursue this goal until it is completed, paused, or reaches its round limit.": "Harness 会持续推进该目标，直到完成、暂停或达到轮次限制。",
