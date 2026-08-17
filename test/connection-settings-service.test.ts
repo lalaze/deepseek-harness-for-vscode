@@ -91,6 +91,38 @@ describe('ConnectionSettingsService', () => {
   })
 
 
+  it('tops up the low reasoning effort on relays written by older builds', async () => {
+    const harness = fakeHarness({
+      'volcengine-ark': {
+        displayName: 'Volcengine Ark',
+        apiKeyEnv: 'PROVIDER_VOLCENGINE_ARK_API_KEY',
+        api: 'openai-completions',
+        baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+        compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: true, supportsDeveloperRole: false },
+        models: [
+          { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+          { id: 'custom-model', reasoningEfforts: { off: null, high: 'high', max: 'custom-max' } },
+          'plain-string-model',
+        ],
+      },
+    })
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    const models = harness.document.piAi.user.providers['volcengine-ark']!['models'] as unknown[]
+    expect(models).toEqual([
+      { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
+      { id: 'custom-model', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'custom-max' } },
+      'plain-string-model',
+    ])
+
+    // The heal is idempotent: a second connect must not write again.
+    const revision = harness.document.piAi.revision
+    await service.connect(harness.client as never)
+    expect(harness.document.piAi.revision).toBe(revision)
+  })
+
+
   it('keeps a stored key and unknown profile fields when editing with a blank key', async () => {
     const harness = fakeHarness({
       packycode: {

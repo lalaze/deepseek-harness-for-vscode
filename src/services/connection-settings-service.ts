@@ -75,6 +75,7 @@ export class ConnectionSettingsService {
   async connect(client: ProviderControlClient): Promise<void> {
     this.client = client
     await this.migrateLegacySettings()
+    await this.migrateRelayReasoningEfforts()
     await this.refresh()
   }
 
@@ -299,6 +300,44 @@ export class ConnectionSettingsService {
     if (legacyBaseUrl !== undefined) await this.configuration.clearLegacyBaseUrl()
   }
 
+  /**
+   * Tops up reasoning effort maps on custom relays written by older builds.
+   * Harness 0.1.0-rc.7 added the `low` tier; relay profiles persist their own
+   * reasoningEfforts map, so existing installs keep showing the old stops
+   * until the map is healed. Idempotent: already-current maps are untouched.
+   */
+  private async migrateRelayReasoningEfforts(): Promise<void> {
+    const client = this.requireClient()
+    const described = valueOf(await client.settings.describe({}))
+    if (!described.writable) return
+    const piAi = described.namespaces.find((item) => item.ns === PI_AI_SETTINGS_NS)
+    if (piAi === undefined) return
+    const providers = valueAt(piAi.user, ['providers'])
+    if (typeof providers !== 'object' || providers === null || Array.isArray(providers)) return
+    const ops: SettingsPathOpView[] = []
+    for (const [route, profile] of Object.entries(providers)) {
+      const models = valueAt(profile, ['models'])
+      if (!Array.isArray(models)) continue
+      let changed = false
+      const upgraded = models.map((model) => {
+        if (typeof model !== 'object' || model === null || Array.isArray(model)) return model
+        const efforts = (model as Record<string, unknown>)['reasoningEfforts']
+        if (typeof efforts !== 'object' || efforts === null || Array.isArray(efforts)) return model
+        if ('low' in efforts) return model
+        changed = true
+        // Extension-written legacy maps are replaced wholesale so the stop
+        // order stays canonical; customized maps only gain the missing entry.
+        const next = isLegacyRelayReasoningEfforts(efforts)
+          ? { ...RELAY_REASONING_EFFORTS }
+          : { off: null, low: 'low', ...efforts }
+        return { ...(model as Record<string, unknown>), reasoningEfforts: next }
+      })
+      if (changed) ops.push({ op: 'set', path: ['providers', route, 'models'], value: upgraded })
+    }
+    if (ops.length === 0) return
+    valueOf(await client.settings.mutate({ ns: PI_AI_SETTINGS_NS, ops, expectedRevision: piAi.revision }))
+  }
+
   private requireClient(): ProviderControlClient {
     if (this.client === undefined) throw new Error('Harness Gateway is not connected.')
     return this.client
@@ -352,11 +391,24 @@ function normalizeRelayModels(models: readonly string[] | undefined): readonly s
   return [...new Set(ids)]
 }
 
+/** Reasoning effort wire map the extension writes for custom relay models. */
+const RELAY_REASONING_EFFORTS = { off: null, low: 'low', high: 'high', max: 'max' } as const
+
+/** Map shape written by builds before the low tier existed (pre rc.7). */
+const LEGACY_RELAY_REASONING_EFFORTS = { off: null, high: 'high', max: 'max' } as const
+
+function isLegacyRelayReasoningEfforts(efforts: object): boolean {
+  const entries = Object.entries(efforts)
+  const legacy = Object.entries(LEGACY_RELAY_REASONING_EFFORTS) as [string, unknown][]
+  return entries.length === legacy.length
+    && legacy.every(([key, value]) => (efforts as Record<string, unknown>)[key] === value)
+}
+
 function relayModels(models: readonly string[]): { id: string; reasoningEfforts: object }[] {
   const ids = models.length > 0 ? models : ['deepseek-v4-flash', 'deepseek-v4-pro']
   return ids.map((id) => ({
     id,
-    reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+    reasoningEfforts: { ...RELAY_REASONING_EFFORTS },
   }))
 }
 
