@@ -369,7 +369,6 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .drop.d3 { left: 4px; animation-delay: .7s; }
 .activity-spout .stream { position: absolute; left: 2px; bottom: 0; width: 1.5px; height: 0; border-radius: 1px; background: linear-gradient(to top, rgba(77, 107, 254, .95), rgba(77, 107, 254, .12)); animation: activity-stream 1.1s ease-out infinite; }
 .activity-verb { color: var(--vscode-foreground); animation: activity-verb-pulse 1.6s ease-in-out infinite; }
-.activity-elapsed { font-variant-numeric: tabular-nums; }
 .activity-hint { opacity: .65; }
 @keyframes activity-spout {
   0% { transform: translateY(0) scale(.6); opacity: 0; }

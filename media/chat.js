@@ -64,7 +64,6 @@ const elements = {
   send: byId('send'),
   composerStatus: byId('composer-status'),
   activityStatus: byId('activity-status'),
-  activityElapsed: byId('activity-elapsed'),
   compact: byId('compact'),
 }
 
@@ -81,8 +80,6 @@ let menuLoadedSession = null
 let selectorSignature = ''
 let interactionSignature = ''
 let detailSignature = ''
-let runStartedAt
-let activityTimer
 const markdownActions = {
   openExternal: (url) => post('openExternal', { url }),
   openFile: (reference) => post('openFile', reference),
@@ -980,37 +977,9 @@ function renderComposer(active) {
   })
 }
 
-/** Claude-style running status line: elapsed time plus an interrupt hint. */
+/** Claude-style running status line with an interrupt hint. */
 function renderActivityStatus(active) {
-  const running = active?.running === true
-  elements.activityStatus.classList.toggle('hidden', !running)
-  if (!running) {
-    runStartedAt = undefined
-    if (activityTimer !== undefined) {
-      clearInterval(activityTimer)
-      activityTimer = undefined
-    }
-    return
-  }
-  // Prefer the real turn start reported by Harness; fall back to the moment
-  // this Webview first observed the run (e.g. after a mid-run reload).
-  runStartedAt = latestRunningStartedAt(active) ?? runStartedAt ?? Date.now()
-  updateActivityElapsed()
-  if (activityTimer === undefined) activityTimer = setInterval(updateActivityElapsed, 500)
-}
-
-function latestRunningStartedAt(active) {
-  const messages = active?.messages ?? []
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const item = messages[index]
-    if (item?.status === 'running' && item.workDuration?.startedAt !== undefined) return item.workDuration.startedAt
-  }
-  return undefined
-}
-
-function updateActivityElapsed() {
-  if (runStartedAt === undefined) return
-  elements.activityElapsed.textContent = formatWorkDuration(Date.now() - runStartedAt)
+  elements.activityStatus.classList.toggle('hidden', active?.running !== true)
 }
 
 function updateCommandMenu() {
