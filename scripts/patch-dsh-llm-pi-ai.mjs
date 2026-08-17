@@ -7,7 +7,7 @@ const packageJsonPath = require.resolve('@deepseek-ai/dsh-llm-pi-ai/package.json
 const packageRoot = dirname(packageJsonPath)
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
 
-if (packageJson.version !== '0.1.0-rc.6') {
+if (packageJson.version !== '0.1.0-rc.7') {
   throw new Error(
     `Unsupported @deepseek-ai/dsh-llm-pi-ai version ${packageJson.version}; `
       + 'review whether the supportsDeveloperRole compatibility patch is still required.',
@@ -89,9 +89,9 @@ const runtimeChanged = await patchFile('lib/index.js', [
   },
   {
     label: 'cross-provider DeepSeek tool replay',
-    before: `\t\t\t\tconst context = attachments === void 0 ? toPiContext(options) : await toPiContext(options, attachments);
+    before: `\t\t\t\tconst context = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade);
 \t\t\t\tconst iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {`,
-    after: `\t\t\t\tconst rawContext = attachments === void 0 ? toPiContext(options) : await toPiContext(options, attachments);
+    after: `\t\t\t\tconst rawContext = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade);
 \t\t\t\t// DeepSeek-compatible relays require reasoning_content to be replayed on
 \t\t\t\t// every assistant tool call. pi-ai normally strips thinking signatures
 \t\t\t\t// when provider ids differ, so normalize only those tool-call messages
