@@ -146,6 +146,7 @@ function payload(
     reasoningEffort: 'high',
     agentPreset: 'standard',
     permissionMode: 'workspace-write',
+    webSearch: true,
     autoAttachSelection: true,
   }
   const active: ActiveSessionView = {

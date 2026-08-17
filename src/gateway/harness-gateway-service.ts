@@ -41,7 +41,10 @@ import {
 } from '../domain/workbench-state.js'
 import type { HarnessHostRuntime } from '../runtime/web-runtime.js'
 import type { ConnectionSettingsService } from '../services/connection-settings-service.js'
-import { NodeGatewayClient } from './node-gateway-client.js'
+import {
+  NodeGatewayClient,
+  type SessionExportResult,
+} from './node-gateway-client.js'
 
 interface PendingApprovalRecord extends PendingApprovalView {
   readonly rpcId: RpcId
@@ -476,6 +479,11 @@ export class HarnessGatewayService implements vscode.Disposable {
     await this.selectModel(current.provider, current.model, reasoningEffort)
   }
 
+  /** Whether the active session's host command catalog contains a slash command. */
+  hasHostCommand(name: string): boolean {
+    return this.commands.some((command) => command.kind === 'host' && command.name === name)
+  }
+
   async selectPreset(agentPreset: string): Promise<void> {
     await this.configuration.setAgentPresetIfKnown(agentPreset)
     const sessionId = this.activeSessionId
@@ -554,6 +562,14 @@ export class HarnessGatewayService implements vscode.Disposable {
     }))
     await this.refreshSessionList()
     await this.selectSession(String(forked.sessionId))
+  }
+
+  /** Downloads the current session's log ZIP (with descendants) for saving. */
+  async exportSession(sessionId?: string, includeDescendants = true): Promise<SessionExportResult> {
+    const client = this.requireClient()
+    if (!(client instanceof NodeGatewayClient)) throw new Error(vscode.l10n.t('The current Gateway does not support session export.'))
+    const id = sessionId ?? this.requireActiveSession()
+    return await client.exportSession(id, includeDescendants)
   }
 
   async answerApproval(key: string, outcome: 'allowed-once' | 'rejected'): Promise<void> {

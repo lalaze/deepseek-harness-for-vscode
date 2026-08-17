@@ -322,6 +322,35 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'answerQuestions':
         await this.gateway.answerQuestions(requiredString(value, 'key'), questionAnswers(value.answers))
         break
+      case 'exportSession': {
+        const sessionId = optionalString(value.sessionId)
+        const exportId = sessionId === undefined ? (await this.gateway.snapshot()).active?.id : sessionId
+        if (exportId === undefined) throw new Error(vscode.l10n.t('Create or select a session first.'))
+        const result = await this.gateway.exportSession(exportId, value.includeDescendants !== false)
+        const target = await vscode.window.showSaveDialog({
+          title: vscode.l10n.t('Export Harness session'),
+          defaultUri: vscode.Uri.file(result.filename),
+          filters: { 'ZIP archive': ['zip'] },
+        })
+        if (target === undefined) break
+        await vscode.workspace.fs.writeFile(target, result.bytes)
+        void vscode.window.showInformationMessage(vscode.l10n.t('Session exported: {0}', target.fsPath))
+        break
+      }
+      case 'feedbackList':
+      case 'feedbackPut':
+      case 'feedbackDelete':
+        // Deferred: the messageFeedback Typert Remote is only reachable over
+        // the client-connection WebSocket protocol, not the HTTP api-proxy
+        // surface. Requires a WS Remote bridge (see phase-0 notes).
+        throw new Error(vscode.l10n.t('Message feedback is not available in this version.'))
+      case 'compact': {
+        if (!this.gateway.hasHostCommand('compact')) {
+          throw new Error(vscode.l10n.t('Compact is not available for this session.'))
+        }
+        await this.gateway.prompt('/compact')
+        break
+      }
     }
   }
 
@@ -395,6 +424,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <button id="back-parent" class="icon-button compact hidden" title="${text('backToParentAgent')}" aria-label="${text('backToParentAgent')}">←</button>
       <button id="session-title" class="title-button" title="${text('renameConversation')}">${text('newConversation')}</button>
       <button id="fork" class="icon-button compact" title="${text('forkConversation')}" aria-label="${text('forkConversation')}">⑂</button>
+      <button id="export-session" class="icon-button compact" title="${text('exportSession')}" aria-label="${text('exportSession')}">⤓</button>
     </div>
   </header>
 
@@ -534,6 +564,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
               <span class="context-meter-ring" aria-hidden="true"></span>
               <span id="context-meter-value" class="context-meter-value"></span>
             </span>
+            <button id="compact" class="compact-button" type="button" title="${text('compact')}">⇅ <span>${text('compact')}</span></button>
           </div>
           <div class="composer-actions">
             <button id="configuration-toggle" class="configuration-toggle" type="button" title="${text('configurationOpen')}" aria-label="${text('configurationOpen')}" aria-expanded="false" aria-controls="configuration-panel" disabled>

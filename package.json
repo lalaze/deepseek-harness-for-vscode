@@ -2,7 +2,7 @@
   "name": "deepseek-harness-for-vscode",
   "displayName": "DeepSeek Harness for Visual Studio Code",
   "description": "%extension.description%",
-  "version": "0.4.7",
+  "version": "0.4.8-dev",
   "type": "module",
   "publisher": "skymecode",
   "license": "MIT",
@@ -190,6 +190,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.autoAttachSelection%"
+        },
+        "deepseekHarness.webSearch": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.webSearch%"
         }
       }
     }

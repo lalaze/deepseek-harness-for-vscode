@@ -27,6 +27,12 @@ export interface HostCommandExecution {
   readonly result?: { readonly kind: 'success' | 'error'; readonly text?: string }
 }
 
+/** Result of downloading a session log ZIP from the Gateway. */
+export interface SessionExportResult {
+  readonly filename: string
+  readonly bytes: Uint8Array
+}
+
 /**
  * Node transport for the Harness Gateway. Unary calls use the official typed
  * fetch client; event downlinks use `ws` because VS Code's extension host is
@@ -52,6 +58,20 @@ export class NodeGatewayClient extends AbstractApiClient {
     return this.callUnaryRaw<HostCommandExecution | undefined>('commands/execute', {
       args: { agentId: sessionId, line },
     })
+  }
+
+  /** Downloads the session log ZIP (with descendant sessions) served by the Gateway. */
+  async exportSession(sessionId: string, includeDescendants = true): Promise<SessionExportResult> {
+    const url = new URL('/api/session.export', this.baseUrl)
+    url.searchParams.set('sessionId', sessionId)
+    url.searchParams.set('includeDescendants', String(includeDescendants))
+    const response = await globalThis.fetch(url)
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Export failed: HTTP ${response.status}${detail === '' ? '' : ` ${detail}`}`)
+    }
+    const filename = `dsh-session-${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_')}.zip`
+    return { filename, bytes: new Uint8Array(await response.arrayBuffer()) }
   }
 
   /**

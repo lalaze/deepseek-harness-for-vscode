@@ -37,6 +37,8 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   backToParentAgent: 'Back to parent agent',
   renameConversation: 'Rename conversation',
   forkConversation: 'Fork from the current progress',
+  exportSession: 'Export session (ZIP)',
+  compact: 'Compact',
   sessionSettings: 'Session settings',
   configurationTitle: 'Model and DSH mode',
   configurationSource: 'DeepSeek source',
