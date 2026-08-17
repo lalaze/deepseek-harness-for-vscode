@@ -989,15 +989,22 @@ function renderActivityStatus(active) {
   elements.activityStatus.classList.toggle('hidden', active?.running !== true && !commandRunning)
 }
 
+/** Signature of the last-rendered pending queue, to skip pointless rebuilds. */
+let queuedSignature = ''
+
 /** QueueDock: prompts the user queued while a turn was running. */
-function renderQueued(active) {
+function renderQueued(active, force = false) {
   const queue = (active?.queue ?? []).filter((item) => item.placement === 'queued')
+  const signature = JSON.stringify(queue)
+  // Rebuilding the dock on every streamed chunk would wipe an in-flight edit
+  // (focus + typed draft). Rebuild only when the pending queue itself changed,
+  // or when a user action in the dock asks for an immediate repaint.
+  if (!force && signature === queuedSignature) return
+  queuedSignature = signature
+  if (queuedEditingId !== null && !queue.some((item) => item.id === queuedEditingId)) queuedEditingId = null
   elements.queuedPanel.classList.toggle('hidden', queue.length === 0)
   elements.queuedPanel.textContent = ''
-  if (queue.length === 0) {
-    queuedEditingId = null
-    return
-  }
+  if (queue.length === 0) return
   elements.queuedPanel.append(node('div', 'queued-title', t('queuedMessages')))
   for (const item of queue) {
     elements.queuedPanel.append(queuedEditingId === item.id ? queuedEditRow(item) : queuedItemRow(item))
@@ -1018,7 +1025,7 @@ function queuedItemRow(item) {
   edit.setAttribute('aria-label', t('editQueued'))
   edit.addEventListener('click', () => {
     queuedEditingId = item.id
-    renderQueued(payload?.state?.active)
+    renderQueued(payload?.state?.active, true)
   })
   const remove = node('button', 'queued-action', '✕')
   remove.title = t('removeQueued')
@@ -1041,14 +1048,14 @@ function queuedEditRow(item) {
   save.addEventListener('click', () => {
     const text = input.value.trim()
     queuedEditingId = null
-    renderQueued(payload?.state?.active)
+    renderQueued(payload?.state?.active, true)
     if (text !== '') post('editQueued', { itemId: item.id, text })
   })
   const cancel = node('button', 'queued-action', '✕')
   cancel.title = t('cancel')
   cancel.addEventListener('click', () => {
     queuedEditingId = null
-    renderQueued(payload?.state?.active)
+    renderQueued(payload?.state?.active, true)
   })
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.isComposing) save.click()
