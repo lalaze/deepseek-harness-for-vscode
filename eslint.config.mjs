@@ -22,6 +22,8 @@ export default tseslint.config(
         Error: 'readonly',
         clearTimeout: 'readonly',
         setTimeout: 'readonly',
+        clearInterval: 'readonly',
+        setInterval: 'readonly',
         Map: 'readonly',
         Set: 'readonly',
         WeakMap: 'readonly',

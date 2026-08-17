@@ -386,11 +386,11 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 
 .tool-card, .context-card { border: 1px solid var(--vscode-widget-border); border-radius: 10px; overflow: hidden; }
 .tool-card summary, .context-card summary { padding: 6px 8px; display: flex; align-items: center; gap: 7px; cursor: pointer; background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent); font-size: 11px; }
-.tool-status { width: 7px; height: 7px; border-radius: 50%; background: var(--vscode-descriptionForeground); }
-.tool-card.running .tool-status { background: var(--vscode-charts-blue, #4d8cff); animation: tool-blink 1s ease-in-out infinite; }
-.tool-card.success .tool-status { background: var(--vscode-testing-iconPassed); }
-.tool-card.error .tool-status { background: var(--vscode-testing-iconFailed); }
-@keyframes tool-blink { 50% { opacity: .25; transform: scale(.7); } }
+.tool-status { width: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--vscode-descriptionForeground); font-size: 11px; line-height: 1; }
+.tool-card.running .tool-status { color: var(--vscode-charts-blue, #4d8cff); animation: tool-blink 1s ease-in-out infinite; }
+.tool-card.success .tool-status { color: var(--vscode-testing-iconPassed); }
+.tool-card.error .tool-status { color: var(--vscode-testing-iconFailed); }
+@keyframes tool-blink { 50% { opacity: .35; transform: scale(.85); } }
 .tool-detail { max-height: 250px; margin: 0; padding: 8px; overflow: auto; color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; line-height: 1.5; }
 .tool-detail.markdown-body { white-space: normal; font-family: inherit; }
 .tool-detail.markdown-body > :first-child { margin-top: 0; }

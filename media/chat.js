@@ -572,7 +572,13 @@ function renderTool(item) {
   const details = node('details', `tool-card ${item.status || ''}`)
   details.dataset.disclosureKey = 'tool'
   const summary = node('summary')
-  summary.append(node('span', 'tool-status'), node('span', 'tool-title', toolDisplayName(item.title || t('tool'))))
+  // Tool calls show a per-tool glyph; tool results show a status mark instead
+  // of a shared round dot.
+  const isResult = String(item.id || '').endsWith('-result')
+  const icon = isResult
+    ? (item.status === 'error' ? '✕' : '✓')
+    : toolIcon(item.title)
+  summary.append(node('span', 'tool-status', icon), node('span', 'tool-title', toolDisplayName(item.title || t('tool'))))
   if (item.detail && item.detail.trim() !== '') {
     summary.append(node('span', 'tool-preview', toolPreviewText(item.detail)))
   }
@@ -590,6 +596,52 @@ function renderTool(item) {
 function toolDisplayName(name) {
   if (name === '') return name
   return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+const TOOL_ICONS = new Map([
+  // Shell / command execution.
+  ['bash', '❯'], ['shell', '❯'], ['terminal', '❯'], ['sh', '❯'], ['zsh', '❯'],
+  ['powershell', '❯'], ['exec', '❯'], ['exec_command', '❯'], ['run_command', '❯'],
+  ['run', '❯'], ['command', '❯'],
+  // File editing.
+  ['edit', '✎'], ['str_replace_editor', '✎'], ['str_replace', '✎'], ['apply_patch', '✎'],
+  ['edit_file', '✎'], ['replace', '✎'], ['rewrite', '✎'], ['write', '✎'], ['create', '✎'],
+  ['create_file', '✎'], ['append', '✎'], ['append_file', '✎'],
+  // File reading / browsing.
+  ['read', '≡'], ['read_file', '≡'], ['view', '≡'], ['view_file', '≡'], ['cat', '≡'],
+  ['ls', '≡'], ['list', '≡'], ['inspect', '≡'], ['stat', '≡'],
+  // Search.
+  ['glob', '⌕'], ['grep', '⌕'], ['search', '⌕'], ['find', '⌕'], ['rg', '⌕'],
+  ['ripgrep', '⌕'], ['find_files', '⌕'], ['search_files', '⌕'],
+  // Web / network.
+  ['web_search', '≋'], ['web', '≋'], ['web_fetch', '≋'], ['fetch', '≋'], ['http', '≋'],
+  ['url', '≋'], ['browser', '≋'], ['request', '≋'],
+  // Workflow orchestration.
+  ['workflow', '⇄'], ['pipeline', '⇄'], ['orchestrator', '⇄'], ['parallel', '⇄'],
+  // Sub-agents.
+  ['subagent', '◎'], ['subagent_fork', '◎'], ['agent', '◎'], ['spawn', '◎'], ['ralph', '◎'],
+  // Goals.
+  ['create_goal', '⚑'], ['update_goal', '⚑'], ['get_goal', '⚑'], ['goal', '⚑'],
+  // Questions / confirmations.
+  ['ask_user_question', '?'], ['ask', '?'], ['ask_user', '?'], ['confirm', '?'], ['prompt', '?'],
+  // Task lists.
+  ['todo_write', '☑'], ['todo', '☑'], ['task', '☑'],
+  // Interrupt / cancel.
+  ['interrupt_agent', '✕'], ['cancel', '✕'], ['kill', '✕'], ['stop', '✕'], ['job_kill', '✕'],
+  // Job control.
+  ['job_list', '▤'], ['job_output', '▤'], ['job', '▤'],
+  // Vision / images.
+  ['read_image', '▣'], ['vision_describe', '▣'], ['vision_ocr', '▣'], ['screenshot', '▣'],
+  ['image', '▣'], ['ocr', '▣'],
+  // Skills.
+  ['skill', '✦'], ['skills', '✦'],
+])
+
+/** Best-effort glyph per tool name; dev_* helpers and unknown tools get a gear. */
+function toolIcon(name) {
+  const normalized = String(name || '').trim().toLowerCase()
+  if (normalized.startsWith('dev_')) return '⚙'
+  return TOOL_ICONS.get(normalized) ?? '⚙'
 }
 
 function toolPreviewText(detail) {
