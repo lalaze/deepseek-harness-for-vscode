@@ -45,6 +45,7 @@ describe('projectConversation', () => {
 
     const messages = projectConversation(entries).messages
     expect(messages[0]).toMatchObject({ id: 'tool-c1-call', status: 'success' })
+    expect(messages[0]?.workDuration).toEqual({ startedAt: 1, endedAt: 2 })
     expect(messages[1]).toMatchObject({ id: 'tool-c1-result', status: 'success' })
   })
 
@@ -79,7 +80,7 @@ describe('projectConversation', () => {
     ] as HistoryEntry[]
 
     expect(projectConversation(entries).messages[0]?.blocks).toEqual([
-      { kind: 'reasoning', text: '先分析' },
+      { kind: 'reasoning', text: '先分析', duration: { startedAt: 1, endedAt: 3 } },
       { kind: 'text', text: '开始回答', streaming: true },
     ])
   })
@@ -100,6 +101,29 @@ describe('projectConversation', () => {
       status: 'success',
       detail: 'preset read-only',
     })])
+  })
+
+  it('attaches chunk timing to reasoning blocks of the finalized message', () => {
+    const entries = [
+      entry(0, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'reasoning' } }),
+      entry(1, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 0, text: '先分析' } }),
+      entry(2, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '先分析' } },
+      }),
+      entry(3, 'assistant/message', {
+        turn: 1, step: 1,
+        message: {
+          id: 'a1', role: 'assistant', source: { kind: 'model', provider: 'p', model: 'm' },
+          content: [{ type: 'reasoning', text: '先分析' }, { type: 'text', text: '结论' }],
+        },
+      }, 'append'),
+    ] as HistoryEntry[]
+
+    expect(projectConversation(entries).messages[0]?.blocks).toEqual([
+      { kind: 'reasoning', text: '先分析', duration: { startedAt: 1, endedAt: 3 } },
+      { kind: 'text', text: '结论' },
+    ])
   })
 
   it('shows one turn duration on the final visible result', () => {

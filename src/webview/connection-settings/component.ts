@@ -31,6 +31,8 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
   const baseUrl = required<HTMLInputElement>(document, 'settings-base-url')
   const baseUrlError = required<HTMLElement>(document, 'settings-base-url-error')
   const apiKey = required<HTMLInputElement>(document, 'settings-api-key')
+  const models = required<HTMLInputElement>(document, 'settings-models')
+  const modelsField = required<HTMLElement>(document, 'settings-models-field')
   const openNative = required<HTMLButtonElement>(document, 'settings-open-native')
   const apply = required<HTMLButtonElement>(document, 'settings-apply')
   const remove = required<HTMLButtonElement>(document, 'settings-delete')
@@ -47,6 +49,7 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
     name: name.value,
     baseUrl: baseUrl.value,
     apiKey: apiKey.value,
+    models: models.value.split(/[,，\s]+/u).map((item) => item.trim()).filter((item) => item !== ''),
   })
 
   const resetTest = (): void => {
@@ -82,6 +85,13 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
     apiKey.value = ''
     apiKey.disabled = !state.writable || (provider !== undefined && !provider.credentialWritable)
     apiKey.placeholder = provider?.apiKeyConfigured === true ? t('apiKeyKeepPlaceholder') : t('apiKeyPlaceholder')
+    // Third-party endpoints are addressed by their own model ids, which the
+    // user must be able to enter (e.g. a Volcengine Ark model or endpoint).
+    modelsField.classList.toggle('hidden', official)
+    models.disabled = !state.writable || official
+    models.value = (provider?.models.length ?? 0) > 0
+      ? provider!.models.join(', ')
+      : 'deepseek-v4-flash, deepseek-v4-pro'
     apply.disabled = !state.writable
     test.classList.toggle('hidden', official)
     baseUrl.classList.remove('invalid')

@@ -33,6 +33,7 @@ const EMPTY_STATE: ConnectionSettingsState = {
     id: DEEPSEEK_OFFICIAL_PROVIDER,
     name: 'DeepSeek Official',
     baseUrl: DEEPSEEK_OFFICIAL_BASE_URL,
+    models: [],
     apiKeyConfigured: false,
     credentialWritable: false,
     removable: false,
@@ -92,13 +93,15 @@ export class ConnectionSettingsService {
     const described = valueOf(settingsResponse)
     const models = valueOf(modelsResponse)
     const namespaces = new Map(described.namespaces.map((namespace) => [namespace.ns, namespace]))
-    const compatible = new Set(models.groups
-      .filter((group) => {
-        const ids = new Set(group.models.map((model) => model.id))
-        return ids.has('deepseek-v4-flash') && ids.has('deepseek-v4-pro')
-      })
-      .map((group) => group.id))
-    compatible.add(DEEPSEEK_OFFICIAL_PROVIDER)
+    // A custom relay is compatible when it exposes at least one model — its
+    // ids need not be the built-in DeepSeek pair (e.g. Volcengine Ark model
+    // ids or endpoint ids). The official route is always compatible.
+    const groupsByProvider = new Map(models.groups.map((group) => [group.id, group]))
+    const compatible = new Set<string>([DEEPSEEK_OFFICIAL_PROVIDER])
+    for (const entry of directory.providers) {
+      if (entry.settingsNs !== DEEPSEEK_SETTINGS_NS && entry.settingsNs !== PI_AI_SETTINGS_NS) continue
+      if (groupsByProvider.get(entry.provider)?.models.length) compatible.add(entry.provider)
+    }
 
     const entries = directory.providers.filter((entry) => (
       compatible.has(entry.provider)
@@ -145,7 +148,7 @@ export class ConnectionSettingsService {
     const client = this.requireClient()
     const namespace = await this.namespace(PI_AI_SETTINGS_NS)
     const keyRef = providerKeyEnv(route)
-    const profile = deepSeekRelayProfile(normalized.name, normalized.baseUrl, keyRef)
+    const profile = deepSeekRelayProfile(normalized.name, normalized.baseUrl, keyRef, normalized.models)
     const ops: SettingsPathOpView[] = existing === undefined
       ? [{ op: 'set', path: ['providers', route], value: profile }]
       : [
@@ -153,6 +156,7 @@ export class ConnectionSettingsService {
           { op: 'set', path: ['providers', route, 'baseURL'], value: normalized.baseUrl },
           { op: 'set', path: ['providers', route, 'api'], value: 'openai-completions' },
           { op: 'set', path: ['providers', route, 'compat'], value: relayCompat() },
+          { op: 'set', path: ['providers', route, 'models'], value: relayModels(normalized.models) },
           ...(normalized.apiKey === '' ? [] : [{ op: 'set' as const, path: ['providers', route, 'apiKeyEnv'], value: keyRef }]),
         ]
     const response = await client.settings.mutate({
@@ -330,20 +334,40 @@ function normalizeInput(input: ConnectionSettingsInput): ConnectionSettingsInput
     throw new Error('The provider base URL cannot be empty.')
   }
   if (!validateBaseUrl(baseUrl).valid) throw new Error('The Base URL must be a valid http(s) URL.')
-  return { ...input, name, baseUrl, apiKey }
+  const models = input.provider === DEEPSEEK_OFFICIAL_PROVIDER
+    ? []
+    : normalizeRelayModels(input.models)
+  return { ...input, name, baseUrl, apiKey, models }
 }
 
-function deepSeekRelayProfile(displayName: string, baseURL: string, apiKeyEnv: string): object {
+/**
+ * A custom relay endpoint is addressed by the model ids it actually exposes
+ * (e.g. a Volcengine Ark model id or endpoint). Empty input keeps the
+ * extension's DeepSeek defaults so existing behavior is preserved.
+ */
+function normalizeRelayModels(models: readonly string[] | undefined): readonly string[] {
+  const ids = (models ?? [])
+    .map((model) => model.trim())
+    .filter((model) => model !== '')
+  return [...new Set(ids)]
+}
+
+function relayModels(models: readonly string[]): { id: string; reasoningEfforts: object }[] {
+  const ids = models.length > 0 ? models : ['deepseek-v4-flash', 'deepseek-v4-pro']
+  return ids.map((id) => ({
+    id,
+    reasoningEfforts: { off: null, high: 'high', max: 'max' },
+  }))
+}
+
+function deepSeekRelayProfile(displayName: string, baseURL: string, apiKeyEnv: string, models?: readonly string[]): object {
   return {
     displayName,
     apiKeyEnv,
     api: 'openai-completions',
     baseURL,
     compat: relayCompat(),
-    models: ['deepseek-v4-flash', 'deepseek-v4-pro'].map((id) => ({
-      id,
-      reasoningEfforts: { off: null, high: 'high', max: 'max' },
-    })),
+    models: relayModels(models ?? []),
   }
 }
 
@@ -367,6 +391,7 @@ function providerView(
     id: entry.provider,
     name: entry.displayName,
     baseUrl,
+    models: modelsField(profile),
     apiKeyConfigured: credential?.configured === true,
     credentialWritable: credential?.writable === true,
     removable: entry.settingsPath.length > 0 && valueAt(namespace?.user, entry.settingsPath) !== undefined,
@@ -386,6 +411,17 @@ function stringField(value: unknown, key: string): string | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const field = (value as Record<string, unknown>)[key]
   return typeof field === 'string' && field.trim() !== '' ? field.trim() : undefined
+}
+
+function modelsField(value: unknown): readonly string[] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return []
+  const models = (value as Record<string, unknown>)['models']
+  if (!Array.isArray(models)) return []
+  return models
+    .map((model) => (typeof model === 'object' && model !== null
+      ? stringField(model, 'id')
+      : typeof model === 'string' ? model : undefined))
+    .filter((model): model is string => model !== undefined)
 }
 
 function valueAt(root: unknown, path: readonly string[]): unknown {

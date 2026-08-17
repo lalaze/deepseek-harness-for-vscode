@@ -478,6 +478,12 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       </section>
 
       <div id="interactions" class="interactions"></div>
+      <div id="activity-status" class="activity-status hidden" role="status">
+        <span class="activity-star" aria-hidden="true">✻</span>
+        <span class="activity-verb">${text('activityWorking')}</span>
+        <span id="activity-elapsed" class="activity-elapsed"></span>
+        <span class="activity-hint">${text('activityEscHint')}</span>
+      </div>
       <section class="composer-shell">
         <section id="configuration-panel" class="configuration-panel hidden" role="dialog" aria-label="${text('configurationTitle')}">
           <header class="configuration-panel-header">
@@ -569,6 +575,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           <span class="settings-label">${text('apiKey')}</span>
           <input id="settings-api-key" type="password" spellcheck="false" autocomplete="off" placeholder="${text('apiKeyPlaceholder')}">
         </label>
+        <label class="settings-field hidden" id="settings-models-field">
+          <span class="settings-label">${text('providerModels')}</span>
+          <input id="settings-models" type="text" spellcheck="false" autocomplete="off" placeholder="${text('providerModelsPlaceholder')}">
+          <small class="settings-hint">${text('providerModelsHint')}</small>
+        </label>
         <div class="settings-test-row">
           <button id="settings-test" class="secondary-button" type="button">${text('testConnection')}</button>
           <span id="settings-test-result" class="settings-status hidden"></span>
@@ -603,7 +614,17 @@ function settingsInput(value: Record<string, unknown>): ConnectionSettingsInput 
   const name = typeof value.name === 'string' ? value.name : ''
   const baseUrl = typeof value.baseUrl === 'string' ? value.baseUrl : ''
   const apiKey = typeof value.apiKey === 'string' ? value.apiKey : ''
-  return { provider, name, baseUrl, apiKey }
+  const models = modelsInput(value.models)
+  return { provider, name, baseUrl, apiKey, models }
+}
+
+/** Accepts an array of ids or a single comma/space-separated string. */
+function modelsInput(value: unknown): readonly string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value.split(/[,，\s]+/u).map((item) => item.trim()).filter((item) => item !== '')
+  }
+  return []
 }
 
 function requiredString(value: Record<string, unknown>, key: string): string {

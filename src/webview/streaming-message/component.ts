@@ -18,6 +18,8 @@ export class StreamingMessageComponent {
     readonly document: Document
     readonly reasoningLabel: () => string
     readonly thinkingLabel: () => string
+    /** "Thought for 12s" style label once a reasoning block has known timing. */
+    readonly reasoningDoneLabel: (elapsedMs: number) => string
     readonly renderMarkdown: (target: HTMLElement, source: string) => void
     readonly onStreamFrame: () => void
   }) {}
@@ -56,7 +58,7 @@ export class StreamingMessageComponent {
       details.dataset.autoOpen = running ? 'true' : 'false'
       details.open = running
       const summary = this.options.document.createElement('summary')
-      summary.append(this.reasoningDot(), this.label(running), this.reasoningPreview(block.text), this.chevron())
+      summary.append(this.reasoningDot(), this.label(running, block), this.reasoningPreview(block.text), this.chevron())
       const content = this.options.document.createElement('div')
       content.className = `reasoning-content markdown-body${running ? ' streaming-content' : ''}`
       this.renderContent(content, block, running)
@@ -79,7 +81,7 @@ export class StreamingMessageComponent {
       rendered.classList.toggle('running', running)
       rendered.dataset.autoOpen = running ? 'true' : 'false'
       rendered.open = running
-      label.textContent = running ? this.options.thinkingLabel() : this.options.reasoningLabel()
+      label.textContent = this.labelText(running, block)
       const summary = rendered.querySelector<HTMLElement>('.reasoning-summary')
       if (summary !== null) {
         const value = this.reasoningPreviewText(block.text)
@@ -125,7 +127,9 @@ export class StreamingMessageComponent {
       state.frame = undefined
       if (!target.isConnected) return
       state.rendered = nextStreamText(state.rendered, state.target)
-      target.textContent = state.rendered
+      // Render each partial frame as Markdown so formatting appears while streaming,
+      // instead of showing raw Markdown source until the block completes.
+      this.options.renderMarkdown(target, state.rendered)
       if (target.classList.contains('reasoning-content')) target.scrollTop = target.scrollHeight
       this.options.onStreamFrame()
       if (state.rendered !== state.target) this.schedule(target, state)
@@ -159,11 +163,20 @@ export class StreamingMessageComponent {
     return dot
   }
 
-  private label(running: boolean): HTMLElement {
+  private label(running: boolean, block?: ChatBlock): HTMLElement {
     const label = this.options.document.createElement('span')
     label.className = 'reasoning-label'
-    label.textContent = running ? this.options.thinkingLabel() : this.options.reasoningLabel()
+    label.textContent = this.labelText(running, block)
     return label
+  }
+
+  private labelText(running: boolean, block?: ChatBlock): string {
+    if (running) return this.options.thinkingLabel()
+    if (block?.duration !== undefined) {
+      const elapsed = Math.max(0, (block.duration.endedAt ?? Date.now()) - block.duration.startedAt)
+      return this.options.reasoningDoneLabel(elapsed)
+    }
+    return this.options.reasoningLabel()
   }
 
   private chevron(): HTMLElement {

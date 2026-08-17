@@ -20,6 +20,7 @@ describe('ConnectionSettingsService', () => {
       name: 'PackyCode',
       baseUrl: 'https://relay.example.com/v1',
       apiKey: 'sk-secret',
+      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     })
 
     expect(route).toBe('packycode')
@@ -39,12 +40,56 @@ describe('ConnectionSettingsService', () => {
       id: 'packycode',
       name: 'PackyCode',
       baseUrl: 'https://relay.example.com/v1',
+      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
       apiKeyConfigured: true,
       credentialWritable: true,
       removable: true,
     })
     expect(JSON.stringify(service.state)).not.toContain('sk-secret')
   })
+
+  it('writes the endpoint-specific model ids a third-party provider exposes', async () => {
+    const harness = fakeHarness()
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    const route = await service.apply({
+      provider: '__new__',
+      name: 'Volcengine Ark',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      apiKey: 'ark-secret',
+      models: ['deepseek-v3.1-250828', 'ep-20250417-xxxxx'],
+    })
+
+    expect(route).toBe('volcengine-ark')
+    expect(harness.document.piAi.value.providers['volcengine-ark']!.models).toEqual([
+      { id: 'deepseek-v3.1-250828', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+      { id: 'ep-20250417-xxxxx', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+    ])
+    expect(service.state.providers.find((provider) => provider.id === 'volcengine-ark')?.models)
+      .toEqual(['deepseek-v3.1-250828', 'ep-20250417-xxxxx'])
+  })
+
+  it('falls back to the DeepSeek defaults when a custom provider omits models', async () => {
+    const harness = fakeHarness()
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    const route = await service.apply({
+      provider: '__new__',
+      name: 'Plain Relay',
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-secret',
+      models: [],
+    })
+
+    expect(route).toBe('plain-relay')
+    expect(harness.document.piAi.value.providers['plain-relay']!.models).toEqual([
+      { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+      { id: 'deepseek-v4-pro', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+    ])
+  })
+
 
   it('keeps a stored key and unknown profile fields when editing with a blank key', async () => {
     const harness = fakeHarness({
@@ -65,6 +110,7 @@ describe('ConnectionSettingsService', () => {
       name: 'Packy Relay',
       baseUrl: 'https://new.example/v1',
       apiKey: '',
+      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     })
 
     expect(harness.document.credentials.PROVIDER_PACKYCODE_API_KEY).toBe('stored-secret')
@@ -85,6 +131,7 @@ describe('ConnectionSettingsService', () => {
       name: '',
       baseUrl: 'https://api.deepseek.com',
       apiKey: '',
+      models: [],
     })
 
     expect(harness.document.credentials.DEEPSEEK_API_KEY).toBe('official-secret')
@@ -100,6 +147,7 @@ describe('ConnectionSettingsService', () => {
       name: '',
       baseUrl: 'https://relay.example/v1',
       apiKey: '',
+      models: [],
     })).rejects.toThrow('custom provider')
   })
 
@@ -251,7 +299,13 @@ function fakeHarness(
       models: () => ok({
         groups: [
           { id: 'deepseek-official', name: 'DeepSeek Official', models: deepSeekModels() },
-          ...Object.keys(document.piAi.value.providers).map((id) => ({ id, name: id, models: deepSeekModels() })),
+          ...Object.entries(document.piAi.value.providers).map(([id, profile]) => ({
+            id,
+            name: id,
+            models: Array.isArray(profile.models)
+              ? profile.models.map((model) => ({ id: String((model as { id?: unknown })?.id ?? ''), name: id }))
+              : deepSeekModels(),
+          })),
         ],
         failures: [],
       }),

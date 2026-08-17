@@ -11,6 +11,7 @@ import { permissionSelectOptions } from '../src/webview/permission/adapter.js'
 import { createPluginCenterComponent } from '../src/webview/plugin-center/component.js'
 import { StreamingMessageComponent } from '../src/webview/streaming-message/component.js'
 import { createWorkDurationComponent } from '../src/webview/work-duration/component.js'
+import { formatWorkDuration } from '../src/webview/work-duration/format.js'
 
 const vscode = acquireVsCodeApi()
 const t = createWebviewTranslator()
@@ -61,6 +62,8 @@ const elements = {
   attachSelection: byId('attach-selection'),
   send: byId('send'),
   composerStatus: byId('composer-status'),
+  activityStatus: byId('activity-status'),
+  activityElapsed: byId('activity-elapsed'),
 }
 
 let payload
@@ -76,6 +79,8 @@ let menuLoadedSession = null
 let selectorSignature = ''
 let interactionSignature = ''
 let detailSignature = ''
+let runStartedAt
+let activityTimer
 const markdownActions = {
   openExternal: (url) => post('openExternal', { url }),
   openFile: (reference) => post('openFile', reference),
@@ -122,6 +127,7 @@ const streamingMessage = new StreamingMessageComponent({
   document,
   reasoningLabel: () => t('reasoningProcess'),
   thinkingLabel: () => t('thinking'),
+  reasoningDoneLabel: (elapsed) => t('thoughtFor', { duration: formatWorkDuration(elapsed) }),
   renderMarkdown: (target, source) => renderMarkdown(target, source, markdownActions),
   onStreamFrame: () => {
     if (isNearBottom(elements.conversation)) elements.conversation.scrollTop = elements.conversation.scrollHeight
@@ -295,6 +301,12 @@ document.addEventListener('keydown', (event) => {
   if (!elements.timelinePanel.classList.contains('hidden')) {
     event.preventDefault()
     closeTimeline()
+    return
+  }
+  if (!byId('settings-panel').classList.contains('hidden') || !byId('plugin-panel').classList.contains('hidden')) return
+  if (payload?.state.active?.running) {
+    event.preventDefault()
+    post('cancel')
   }
 })
 elements.permission.addEventListener('change', () => post('setPermission', { value: elements.permission.value }))
@@ -338,6 +350,7 @@ function render() {
   renderInteractions(active)
   if (!elements.details.classList.contains('hidden')) renderDetails()
   renderComposer(active)
+  renderActivityStatus(active)
   updateCommandMenu()
   connectionSettings.update(
     payload.connectionSettings ?? { writable: false, providers: [] },
@@ -540,7 +553,7 @@ function renderMessage(item, conclusionId) {
     const notice = node('div', `notice ${item.status || ''}`)
     notice.append(node('strong', '', item.title || t('status')))
     if (item.detail) notice.append(node('span', '', item.detail))
-    workDuration.update(notice, item.workDuration, item.status === 'running' && item.workDuration === undefined)
+    workDuration.update(notice, item.status === 'running' ? undefined : item.workDuration, item.status === 'running')
     return notice
   }
   const article = node('article', `message ${item.role || ''}`)
@@ -549,7 +562,7 @@ function renderMessage(item, conclusionId) {
   const body = node('div', 'message-body')
   streamingMessage.render(body, item)
   article.append(body)
-  workDuration.update(article, item.workDuration, item.status === 'running' && item.workDuration === undefined)
+  workDuration.update(article, item.status === 'running' ? undefined : item.workDuration)
   if (item.role === 'assistant' && item.id === conclusionId) article.append(createCopyFooter(item))
   return article
 }
@@ -570,7 +583,7 @@ function renderTool(item) {
     details.append(detail)
   }
   container.append(details)
-  workDuration.update(container, item.workDuration, item.status === 'running' && item.workDuration === undefined)
+  workDuration.update(container, item.status === 'running' ? undefined : item.workDuration)
   return container
 }
 
@@ -889,6 +902,39 @@ function renderComposer(active) {
   })
 }
 
+/** Claude-style running status line: elapsed time plus an interrupt hint. */
+function renderActivityStatus(active) {
+  const running = active?.running === true
+  elements.activityStatus.classList.toggle('hidden', !running)
+  if (!running) {
+    runStartedAt = undefined
+    if (activityTimer !== undefined) {
+      clearInterval(activityTimer)
+      activityTimer = undefined
+    }
+    return
+  }
+  // Prefer the real turn start reported by Harness; fall back to the moment
+  // this Webview first observed the run (e.g. after a mid-run reload).
+  runStartedAt = latestRunningStartedAt(active) ?? runStartedAt ?? Date.now()
+  updateActivityElapsed()
+  if (activityTimer === undefined) activityTimer = setInterval(updateActivityElapsed, 500)
+}
+
+function latestRunningStartedAt(active) {
+  const messages = active?.messages ?? []
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index]
+    if (item?.status === 'running' && item.workDuration?.startedAt !== undefined) return item.workDuration.startedAt
+  }
+  return undefined
+}
+
+function updateActivityElapsed() {
+  if (runStartedAt === undefined) return
+  elements.activityElapsed.textContent = formatWorkDuration(Date.now() - runStartedAt)
+}
+
 function updateCommandMenu() {
   const active = payload?.state?.active
   const token = currentCommandToken(elements.prompt)
@@ -1203,7 +1249,7 @@ function patchStreamingMessage(element, item) {
   const body = element.querySelector('.message-body')
   if (!body) return false
   if (!streamingMessage.patch(body, item)) return false
-  workDuration.update(element, item.workDuration, item.status === 'running' && item.workDuration === undefined)
+  workDuration.update(element, item.status === 'running' ? undefined : item.workDuration)
   return true
 }
 

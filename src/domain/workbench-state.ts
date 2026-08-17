@@ -27,6 +27,8 @@ export interface ChatBlock {
   readonly text: string
   /** Present only while the runtime is still emitting deltas for this block. */
   readonly streaming?: boolean
+  /** Wall-clock timing derived from chunk events; only reasoning blocks carry it. */
+  readonly duration?: TurnDurationView
 }
 
 export interface ChatItem {
@@ -39,7 +41,10 @@ export interface ChatItem {
   readonly status?: 'running' | 'success' | 'error' | 'info'
   readonly blocks?: readonly ChatBlock[]
   readonly detail?: string
-  /** Timing of the Harness turn, shown only on that turn's last visible item. */
+  /**
+   * Turn timing, attached to the turn's last visible item that has no timing
+   * of its own; tool call items carry their own call duration instead.
+   */
   readonly workDuration?: TurnDurationView
 }
 
@@ -309,13 +314,8 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
     messages.push(message)
     if (turn !== undefined) messageTurns.set(message.id, turn)
   }
-  const updateMessageStatus = (id: string, status: Exclude<ChatItem['status'], undefined>): void => {
-    const index = messages.findIndex((item) => item.id === id)
-    const current = messages[index]
-    if (current === undefined) return
-    messages[index] = { ...current, status }
-  }
   const finalSteps = new Set<string>()
+  const blockTimes = new Map<string, Map<number, TurnDurationView>>()
   const partials = new Map<string, PartialBlocks>()
   const commandRuns = new Map<string, {
     readonly seq: number
@@ -334,6 +334,20 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   for (const { event } of entries) {
     if (event.type === 'assistant/message') {
       finalSteps.add(stepKey(event.data.turn, event.data.step))
+    } else if (event.type === 'assistant/chunk') {
+      // Track per-block wall-clock times for every chunk, including chunks of
+      // steps later replaced by a finalized assistant message.
+      const chunk = event.data.chunk
+      if ('index' in chunk && typeof chunk.index === 'number') {
+        const key = stepKey(event.data.turn, event.data.step)
+        const times = blockTimes.get(key) ?? new Map<number, TurnDurationView>()
+        blockTimes.set(key, times)
+        if (chunk.type === 'block-end') {
+          times.set(chunk.index, { startedAt: times.get(chunk.index)?.startedAt ?? event.time, endedAt: event.time })
+        } else if (!times.has(chunk.index)) {
+          times.set(chunk.index, { startedAt: event.time })
+        }
+      }
     } else if (event.type === 'command/run') {
       commandRuns.set(String(event.data.commandId), {
         seq: event.seq,
@@ -372,13 +386,14 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         const key = stepKey(event.data.turn, event.data.step)
         if (finalSteps.has(key)) break
         const partial = partials.get(key) ?? new PartialBlocks(event.seq, event.time, labels)
-        partial.push(event.data.chunk)
+        partial.push(event.data.chunk, event.time)
         partials.set(key, partial)
         break
       }
       case 'assistant/message': {
         if (isReplacement(event.surfaceOp)) break
-        const blocks = projectBlocks(event.data.message.content, labels)
+        const times = blockTimes.get(stepKey(event.data.turn, event.data.step))
+        const blocks = projectTimedBlocks(event.data.message.content, times, labels)
         if (blocks.length > 0) {
           addMessage({
             id: `event-${event.seq}`,
@@ -400,19 +415,29 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
           title: event.data.name,
           status: 'running',
           detail: prettyJson(event.data.arguments),
+          workDuration: { startedAt: event.time },
         }, event.data.turn)
         break
       }
       case 'tool/result': {
         const callId = String(event.data.message.source.callId)
-        updateMessageStatus(`tool-${callId}-call`, event.data.error === undefined ? 'success' : 'error')
+        const status = event.data.error === undefined ? 'success' : 'error'
+        const callIndex = messages.findIndex((item) => item.id === `tool-${callId}-call`)
+        const call = messages[callIndex]
+        if (call !== undefined) {
+          messages[callIndex] = {
+            ...call,
+            status,
+            workDuration: { startedAt: call.time, endedAt: Math.max(call.time, event.time) },
+          }
+        }
         addMessage({
           id: `tool-${callId}-result`,
           seq: event.seq,
           time: event.time,
           kind: 'tool',
           title: labels.toolResult,
-          status: event.data.error === undefined ? 'success' : 'error',
+          status,
           detail: blockText(event.data.message.content, labels),
         }, event.data.turn)
         break
@@ -490,7 +515,9 @@ function attachTurnDurations(
   for (const [turn, duration] of durations) {
     const index = lastMessageIndex.get(turn)
     const message = index === undefined ? undefined : messages[index]
-    if (index !== undefined && message !== undefined) messages[index] = { ...message, workDuration: duration }
+    if (index !== undefined && message !== undefined && message.workDuration === undefined) {
+      messages[index] = { ...message, workDuration: duration }
+    }
   }
 }
 
@@ -516,29 +543,34 @@ class PartialBlocks {
   readonly seq: number
   readonly time: number
   private readonly values = new Map<number, ChatBlock>()
+  private readonly times = new Map<number, TurnDurationView>()
 
   constructor(seq: number, time: number, private readonly labels: WorkbenchLabels) {
     this.seq = seq
     this.time = time
   }
 
-  push(chunk: Extract<HistoryEntry['event'], { type: 'assistant/chunk' }>['data']['chunk']): void {
+  push(chunk: Extract<HistoryEntry['event'], { type: 'assistant/chunk' }>['data']['chunk'], time: number): void {
     switch (chunk.type) {
       case 'block-start':
         if (chunk.blockType === 'text' || chunk.blockType === 'reasoning') {
           this.values.set(chunk.index, { kind: chunk.blockType, text: '', streaming: true })
+          this.times.set(chunk.index, { startedAt: time })
         }
         break
       case 'text-delta':
         this.append(chunk.index, 'text', chunk.text)
+        this.markStarted(chunk.index, time)
         break
       case 'reasoning-delta':
         this.append(chunk.index, 'reasoning', chunk.text)
+        this.markStarted(chunk.index, time)
         break
       case 'block-end': {
         const blocks = projectBlocks([chunk.block], this.labels)
         const block = blocks[0]
         if (block !== undefined) this.values.set(chunk.index, block)
+        this.times.set(chunk.index, { startedAt: this.times.get(chunk.index)?.startedAt ?? time, endedAt: time })
         break
       }
       default:
@@ -547,13 +579,36 @@ class PartialBlocks {
   }
 
   blocks(): ChatBlock[] {
-    return [...this.values.entries()].sort(([a], [b]) => a - b).map(([, value]) => value)
+    return [...this.values.entries()].sort(([a], [b]) => a - b).map(([index, value]) => {
+      const time = value.kind === 'reasoning' ? this.times.get(index) : undefined
+      return time === undefined ? value : { ...value, duration: time }
+    })
+  }
+
+  private markStarted(index: number, time: number): void {
+    if (!this.times.has(index)) this.times.set(index, { startedAt: time })
   }
 
   private append(index: number, kind: 'text' | 'reasoning', text: string): void {
     const previous = this.values.get(index)
     this.values.set(index, { kind, text: (previous?.kind === kind ? previous.text : '') + text, streaming: true })
   }
+}
+
+/** Like projectBlocks, attaching chunk timing to reasoning blocks by content index. */
+function projectTimedBlocks(
+  content: readonly unknown[],
+  times: ReadonlyMap<number, TurnDurationView> | undefined,
+  labels: WorkbenchLabels,
+): ChatBlock[] {
+  const result: ChatBlock[] = []
+  content.forEach((value, index) => {
+    const block = projectBlocks([value], labels)[0]
+    if (block === undefined) return
+    const time = block.kind === 'reasoning' ? times?.get(index) : undefined
+    result.push(time === undefined ? block : { ...block, duration: time })
+  })
+  return result
 }
 
 function projectBlocks(blocks: readonly unknown[], labels: WorkbenchLabels): ChatBlock[] {

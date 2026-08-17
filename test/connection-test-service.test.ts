@@ -14,6 +14,7 @@ describe('ConnectionTestService', () => {
       name: 'PackyCode',
       baseUrl: 'https://relay.example/v1',
       apiKey: '',
+      models: [],
     })).resolves.toEqual({ status: 'success', modelCount: 1 })
     expect(discoverModels).toHaveBeenCalledWith({
       settingsNs: 'llm-pi-ai',
@@ -38,6 +39,7 @@ describe('ConnectionTestService', () => {
       name: 'PackyCode',
       baseUrl: 'https://relay.example/v1',
       apiKey: '',
+      models: [],
     })).resolves.toEqual({ status: 'unreachable', detail: '/models answered 500' })
   })
 })
