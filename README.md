@@ -48,6 +48,14 @@ The workbench follows the VS Code display language. The screenshots below use Si
   </tr>
 </table>
 
+<p align="center">
+  <a href="docs/images/workbench-preview.png">
+    <img src="docs/images/workbench-preview.png" alt="DeepSeek Harness workbench preview" width="480">
+  </a>
+  <br>
+  <sub>Full workbench preview</sub>
+</p>
+
 ## Installation
 
 1. Download the VSIX matching your platform from [Releases](https://github.com/skymecode/deepseek-harness-for-vscode/releases).
