@@ -4,11 +4,12 @@
 
 在 VS Code 中原生运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 AI 编码助手扩展。无需克隆上游仓库、安装 Node/npm 或手动部署 Harness；安装匹配平台的 VSIX 即可使用。
 
-> 当前为社区开发版本 `0.4.6`。DeepSeek Harness 仍处于 Developer Preview，本扩展固定使用官方 npm 包 `@deepseek-ai/dsh@0.1.0-rc.6`。
+> 当前为社区开发版本 `0.4.7`。DeepSeek Harness 仍处于 Developer Preview，本扩展固定使用官方 npm 包 `@deepseek-ai/dsh@0.1.0-rc.6`。
 
 ## 功能
 
 - **原生 VS Code 工作台**：全部交互都在侧边栏完成；本地 Harness Gateway 只开放回环 API 传输，不再提供或嵌入官方 WebUI。
+- **可分离工作台**：可在编辑器区打开同步的对话面板，需要更大空间时可将其移到另一个 VS Code 窗口。
 - **完整会话管理**：持久化历史、新建、切换、重命名和分支会话。
 - **Markdown 流式回复**：支持标题、列表、表格、代码块、一键复制、安全外链及可点击跳转的工作区文件引用。
 - **稳定增量渲染**：流式更新保留推理/工具卡展开状态和用户滚动位置。
@@ -105,6 +106,7 @@
 | 命令 | 说明 |
 |---|---|
 | `DeepSeek Harness: 打开工作台` | 打开侧边栏工作台 |
+| `DeepSeek Harness: 在新窗口打开工作台` | 打开可分离的编辑器区工作台 |
 | `DeepSeek Harness: 重新加载工作台` | 重启运行时并重新连接 |
 | `DeepSeek Harness: 设置 API Key` | 保存 API Key |
 | `DeepSeek Harness: 清除 API Key` | 清除 API Key |

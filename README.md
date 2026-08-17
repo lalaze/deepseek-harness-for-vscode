@@ -4,11 +4,12 @@
 
 A native VS Code coding-agent extension powered by [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Install the platform-specific VSIX and start working—there is no upstream repository to clone, no Node/npm setup, and no local Harness deployment to manage.
 
-> This is a community-maintained `0.4.6` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
+> This is a community-maintained `0.4.7` release. DeepSeek Harness is currently a Developer Preview, and this extension pins the official `@deepseek-ai/dsh@0.1.0-rc.6` package.
 
 ## Features
 
 - **Native VS Code workbench** — all interaction happens in the sidebar; the local Harness Gateway exposes only the loopback API transport, while the official WebUI is neither served nor embedded.
+- **Detachable workbench** — open the same synchronized conversation UI in an editor-area panel and move it to another VS Code window when more space is needed.
 - **Complete session workflow** — persistent history, create, switch, rename, fork, and resume sessions.
 - **Streaming Markdown** — headings, lists, tables, code blocks, copy controls, safe external links, and clickable workspace file references.
 - **Stable incremental rendering** — streamed updates preserve disclosure state and the reader's scroll position.
@@ -102,13 +103,14 @@ Automatically attached selections are limited to 16 KB and are truncated when ne
 
 ## Commands
 
-| Command                              | Description                       |
-| ------------------------------------ | --------------------------------- |
-| `DeepSeek Harness: Open Workbench`   | Open the sidebar workbench        |
-| `DeepSeek Harness: Reload Workbench` | Restart the runtime and reconnect |
-| `DeepSeek Harness: Set API Key`      | Save the API Key                  |
-| `DeepSeek Harness: Clear API Key`    | Clear the API Key                 |
-| `DeepSeek Harness: Show Logs`        | Open diagnostic logs              |
+| Command                                              | Description                               |
+| ---------------------------------------------------- | ----------------------------------------- |
+| `DeepSeek Harness: Open Workbench`                   | Open the sidebar workbench                |
+| `DeepSeek Harness: Open Workbench in New Window`     | Open the detachable editor-area workbench |
+| `DeepSeek Harness: Reload Workbench`                 | Restart the runtime and reconnect         |
+| `DeepSeek Harness: Set API Key`                      | Save the API Key                          |
+| `DeepSeek Harness: Clear API Key`                    | Clear the API Key                         |
+| `DeepSeek Harness: Show Logs`                        | Open diagnostic logs                      |
 
 ## Localization
 

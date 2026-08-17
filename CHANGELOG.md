@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.7
+
+- 新增可分离工作台：可从侧边栏标题栏或命令面板在编辑器区新窗口打开 DeepSeek Harness，并在重复打开时复用现有面板。
+- 侧边栏与可分离面板共享 Gateway 状态、会话、编辑器选区、插件状态和连接测试结果，保持两个工作台同步。
+- 修复 Windows 下 Gateway Runtime 插件的启动路径，统一转换为标准 `file://` URL；从独立面板首次打开时也会主动启动 Gateway。
+
 ## 0.4.6
 
 - Harness 后台改为真正的无界面 Gateway：保留官方 `/api` 与事件传输，但禁用官方 SPA 静态 fallback；访问回环端口根路径现在返回 404，不再提供 WebUI。
