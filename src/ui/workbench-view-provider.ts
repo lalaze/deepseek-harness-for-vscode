@@ -326,25 +326,24 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         const sessionId = optionalString(value.sessionId)
         const exportId = sessionId === undefined ? (await this.gateway.snapshot()).active?.id : sessionId
         if (exportId === undefined) throw new Error(vscode.l10n.t('Create or select a session first.'))
-        const result = await this.gateway.exportSession(exportId, value.includeDescendants !== false)
+        const filename = exportFilename(exportId)
+        // Ask for the destination before downloading so a cancelled dialog
+        // does not waste a potentially large ZIP transfer.
         const target = await vscode.window.showSaveDialog({
           title: vscode.l10n.t('Export Harness session'),
-          defaultUri: vscode.Uri.file(result.filename),
+          defaultUri: vscode.Uri.file(filename),
           filters: { 'ZIP archive': ['zip'] },
         })
         if (target === undefined) break
-        await vscode.workspace.fs.writeFile(target, result.bytes)
+        const bytes = await this.gateway.exportSession(exportId, value.includeDescendants !== false)
+        await vscode.workspace.fs.writeFile(target, bytes)
         void vscode.window.showInformationMessage(vscode.l10n.t('Session exported: {0}', target.fsPath))
         break
       }
-      case 'feedbackList':
-      case 'feedbackPut':
-      case 'feedbackDelete':
-        // Deferred: the messageFeedback Typert Remote is only reachable over
-        // the client-connection WebSocket protocol, not the HTTP api-proxy
-        // surface. Requires a WS Remote bridge (see phase-0 notes).
-        throw new Error(vscode.l10n.t('Message feedback is not available in this version.'))
       case 'compact': {
+        // The command catalog can lag a freshly opened session; refresh it so
+        // the availability check is against the live registration.
+        await this.gateway.refreshCommands()
         if (!this.gateway.hasHostCommand('compact')) {
           throw new Error(vscode.l10n.t('Compact is not available for this session.'))
         }
@@ -666,6 +665,11 @@ function requiredString(value: Record<string, unknown>, key: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+/** Stable, cross-platform ZIP name for a session log export. */
+function exportFilename(sessionId: string): string {
+  return `dsh-session-${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_')}.zip`
 }
 
 function optionalHttpUrl(value: unknown): string | undefined {

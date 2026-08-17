@@ -41,10 +41,7 @@ import {
 } from '../domain/workbench-state.js'
 import type { HarnessHostRuntime } from '../runtime/web-runtime.js'
 import type { ConnectionSettingsService } from '../services/connection-settings-service.js'
-import {
-  NodeGatewayClient,
-  type SessionExportResult,
-} from './node-gateway-client.js'
+import { NodeGatewayClient } from './node-gateway-client.js'
 
 interface PendingApprovalRecord extends PendingApprovalView {
   readonly rpcId: RpcId
@@ -565,7 +562,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   /** Downloads the current session's log ZIP (with descendants) for saving. */
-  async exportSession(sessionId?: string, includeDescendants = true): Promise<SessionExportResult> {
+  async exportSession(sessionId?: string, includeDescendants = true): Promise<Uint8Array> {
     const client = this.requireClient()
     if (!(client instanceof NodeGatewayClient)) throw new Error(vscode.l10n.t('The current Gateway does not support session export.'))
     const id = sessionId ?? this.requireActiveSession()
