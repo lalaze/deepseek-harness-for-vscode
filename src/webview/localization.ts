@@ -141,6 +141,7 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   tool: 'Tool',
   toolArguments: 'Arguments',
   toolResult: 'Tool result',
+  toolTokens: '· {tokens} tokens',
   approvalRequired: 'Approval required: {tool}',
   reject: 'Reject',
   allowOnce: 'Allow once',

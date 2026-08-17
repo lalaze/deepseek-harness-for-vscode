@@ -595,19 +595,29 @@ function renderTool(item) {
   }
   details.append(summary)
   if (item.detail && item.detail.trim() !== '') {
-    details.append(node('div', 'tool-section-label', t('toolArguments')))
+    details.append(toolSectionLabel(t('toolArguments'), estimateReasoningTokens(item.detail)))
     const detail = node('div', 'tool-detail')
     renderToolDetail(detail, item.detail)
     details.append(detail)
   }
   if (item.result && item.result.trim() !== '') {
-    details.append(node('div', 'tool-section-label', t('toolResult')))
+    details.append(toolSectionLabel(t('toolResult'), estimateReasoningTokens(item.result)))
     const result = node('div', 'tool-detail')
     renderToolDetail(result, item.result)
     details.append(result)
   }
   container.append(details)
   return container
+}
+
+/** Section heading for a tool card, with a muted estimated token count. */
+function toolSectionLabel(label, tokens) {
+  const el = node('div', 'tool-section-label')
+  el.append(document.createTextNode(label))
+  if (tokens !== undefined) {
+    el.append(node('span', 'tool-tokens', t('toolTokens', { tokens: formatTokenCount(tokens) })))
+  }
+  return el
 }
 
 function toolDisplayName(name) {
