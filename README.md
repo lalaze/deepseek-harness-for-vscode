@@ -31,30 +31,22 @@ The workbench follows the VS Code display language. The screenshots below use Si
 
 <table>
   <tr>
-    <td align="center" width="56%">
-      <a href="docs/images/workbench-overview.png">
-        <img src="docs/images/workbench-overview.png" alt="DeepSeek Harness native VS Code workbench" width="420">
+    <td align="center" width="58%">
+      <a href="docs/images/workbench-preview.png">
+        <img src="docs/images/workbench-preview.png" alt="DeepSeek Harness native VS Code workbench" width="460">
       </a>
     </td>
-    <td align="center" width="44%">
+    <td align="center" width="42%">
       <a href="docs/images/model-and-effort.png">
         <img src="docs/images/model-and-effort.png" alt="Model, DSH mode, and reasoning effort controls" width="300">
       </a>
     </td>
   </tr>
   <tr>
-    <td align="center"><sub>Native conversation workbench</sub></td>
+    <td align="center"><sub>Native conversation workbench — streaming replies, tool calls, composer pinned to the bottom</sub></td>
     <td align="center"><sub>Model, DSH mode, and reasoning effort</sub></td>
   </tr>
 </table>
-
-<p align="center">
-  <a href="docs/images/workbench-preview.png">
-    <img src="docs/images/workbench-preview.png" alt="DeepSeek Harness workbench preview" width="480">
-  </a>
-  <br>
-  <sub>Full workbench preview</sub>
-</p>
 
 ## Installation
 

@@ -31,19 +31,19 @@
 
 <table>
   <tr>
-    <td align="center" width="56%">
-      <a href="docs/images/workbench-overview.png">
-        <img src="docs/images/workbench-overview.png" alt="DeepSeek Harness 原生 VS Code 工作台" width="420">
+    <td align="center" width="58%">
+      <a href="docs/images/workbench-preview.png">
+        <img src="docs/images/workbench-preview.png" alt="DeepSeek Harness 原生 VS Code 工作台" width="460">
       </a>
     </td>
-    <td align="center" width="44%">
+    <td align="center" width="42%">
       <a href="docs/images/model-and-effort.png">
         <img src="docs/images/model-and-effort.png" alt="模型、DSH 模式与推理等级设置" width="300">
       </a>
     </td>
   </tr>
   <tr>
-    <td align="center"><sub>原生对话工作台</sub></td>
+    <td align="center"><sub>原生对话工作台 —— 流式回复、工具调用，输入框固定在底部</sub></td>
     <td align="center"><sub>模型、DSH 模式与推理等级</sub></td>
   </tr>
 </table>
