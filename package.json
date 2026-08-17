@@ -2,7 +2,7 @@
   "name": "deepseek-harness-for-vscode",
   "displayName": "DeepSeek Harness for Visual Studio Code",
   "description": "%extension.description%",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "type": "module",
   "publisher": "skymecode",
   "license": "MIT",
@@ -51,6 +51,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "deepseekHarness.openChatWindow",
+        "title": "%command.openChatWindow%",
+        "icon": "$(new-window)"
+      },
+      {
         "command": "deepseekHarness.reloadRuntime",
         "title": "%command.reloadRuntime%",
         "icon": "$(refresh)"
@@ -88,6 +93,11 @@
     },
     "menus": {
       "view/title": [
+        {
+          "command": "deepseekHarness.openChatWindow",
+          "when": "view == deepseekHarness.chatView",
+          "group": "navigation@3"
+        },
         {
           "command": "deepseekHarness.reloadRuntime",
           "when": "view == deepseekHarness.chatView",

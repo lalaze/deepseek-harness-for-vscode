@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import type { HarnessConfiguration } from '../config/configuration.js'
 
 /** Generates a trusted overlay from validated VS Code settings. */
@@ -12,7 +13,7 @@ export function renderOverlay(configuration: HarnessConfiguration, gatewayPlugin
     # Keep the official API transport alive by providing only the bind facts
     # consumed by dsh-client-connection. No HTTP fallback is registered.
     - id: vscode-gateway-runtime
-      name: ${JSON.stringify(gatewayPluginPath)}
+      name: ${JSON.stringify(pathToFileURL(gatewayPluginPath).href)}
       config:
         printUrl: true
 

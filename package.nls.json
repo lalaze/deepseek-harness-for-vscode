@@ -1,6 +1,7 @@
 {
   "extension.description": "A native DeepSeek Harness coding agent for VS Code. Uses the local Harness Gateway without requiring a separate deployment.",
   "command.openChat": "DeepSeek Harness: Open Workbench",
+  "command.openChatWindow": "DeepSeek Harness: Open Workbench in New Window",
   "command.reloadRuntime": "DeepSeek Harness: Reload Workbench",
   "command.setApiKey": "DeepSeek Harness: Set API Key",
   "command.clearApiKey": "DeepSeek Harness: Clear API Key",

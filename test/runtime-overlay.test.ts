@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { renderOverlay } from '../src/runtime/runtime-overlay.js'
 
@@ -18,7 +19,7 @@ describe('Harness Web profile overlay', () => {
     expect(overlay).toContain('id: web-runtime')
     expect(overlay).toContain('disabled: true')
     expect(overlay).toContain('id: vscode-gateway-runtime')
-    expect(overlay).toContain('name: "/extension/dist/runtime/gateway-runtime.mjs"')
+    expect(overlay).toContain(`name: ${JSON.stringify(pathToFileURL('/extension/dist/runtime/gateway-runtime.mjs').href)}`)
     expect(overlay).toContain('reasoningEffort: max')
     expect(overlay).toContain('provider: "packycode"')
     expect(overlay).toContain('model: deepseek-v4-pro')

@@ -101,6 +101,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.commands.registerCommand('deepseekHarness.openChat', focusWorkbench),
+    vscode.commands.registerCommand('deepseekHarness.openChatWindow', () => provider.openPanel()),
     vscode.commands.registerCommand('deepseekHarness.reloadRuntime', () => provider.refresh()),
     vscode.commands.registerCommand('deepseekHarness.setApiKey', setApiKey),
     vscode.commands.registerCommand('deepseekHarness.clearApiKey', async () => {

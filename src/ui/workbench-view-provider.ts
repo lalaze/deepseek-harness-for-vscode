@@ -25,8 +25,10 @@ export interface WorkbenchViewActions {
 /** Native Codex/Cline-style workbench. No Harness page or iframe is embedded. */
 export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'deepseekHarness.chatView'
+  static readonly panelViewType = 'deepseekHarness.chatPanel'
 
   private view: vscode.WebviewView | undefined
+  private panel: vscode.WebviewPanel | undefined
   private readonly subscriptions: vscode.Disposable[]
   private publishing: Promise<void> | undefined
   private publishPending = false
@@ -46,9 +48,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     }), connectionSettings.onDidChange(() => {
       void this.publishState().catch(() => undefined)
     }), pluginCenter.onDidChange((snapshot) => {
-      void this.view?.webview.postMessage({ type: 'pluginState', snapshot })
+      void this.postToHosts({ type: 'pluginState', snapshot })
     }), editorSelection.onDidChange((selection) => {
-      void this.view?.webview.postMessage({ type: 'editorSelection', selection })
+      void this.postToHosts({ type: 'editorSelection', selection })
     })]
   }
 
@@ -77,6 +79,46 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose()
+    this.panel?.dispose()
+  }
+
+  /** Opens the workbench in a detachable editor-area panel, like Claude Code. */
+  openPanel(): void {
+    if (this.panel !== undefined) {
+      this.panel.reveal()
+      return
+    }
+    const panel = vscode.window.createWebviewPanel(
+      WorkbenchViewProvider.panelViewType,
+      vscode.l10n.t('DeepSeek Harness'),
+      vscode.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this.extensionUri, 'media'),
+          vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview'),
+        ],
+      },
+    )
+    panel.webview.html = this.html(panel.webview)
+    panel.webview.onDidReceiveMessage((message: unknown) => {
+      void this.handleMessage(message).catch((cause: unknown) => {
+        const detail = cause instanceof Error ? cause.message : String(cause)
+        void vscode.window.showErrorMessage(vscode.l10n.t('DeepSeek Harness: {0}', detail))
+      })
+    })
+    panel.onDidDispose(() => {
+      if (this.panel === panel) this.panel = undefined
+    })
+    this.panel = panel
+    void this.publishState().catch(() => undefined)
+    void this.publishEditorSelection()
+  }
+
+  private postToHosts(message: unknown): void {
+    void this.view?.webview.postMessage(message)
+    void this.panel?.webview.postMessage(message)
   }
 
   private publishState(): Promise<void> {
@@ -98,7 +140,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       this.publishPending = false
       const state = await this.gateway.snapshot()
       const connectionSettings = this.connectionSettings.state
-      await this.view?.webview.postMessage({
+      await this.postToHosts({
         type: 'state',
         state,
         configuration: this.configuration.get(),
@@ -136,7 +178,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       }
       case 'testConnection': {
         const result = await this.actions.testConnection(settingsInput(value))
-        await this.view?.webview.postMessage({ type: 'connectionTestResult', ...result })
+        await this.postToHosts({ type: 'connectionTestResult', ...result })
         break
       }
       case 'openSettings':
@@ -164,7 +206,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'searchSessions': {
         const query = typeof value.query === 'string' ? value.query : ''
         const results = await this.gateway.searchSessions(query)
-        await this.view?.webview.postMessage({ type: 'searchResults', query, results })
+        await this.postToHosts({ type: 'searchResults', query, results })
         break
       }
       case 'selectSession':
@@ -220,7 +262,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         const query = typeof value.query === 'string' ? value.query.slice(0, 200) : ''
         const requestId = numberValue(value.requestId)
         const files = await this.workspaceFiles.search(query)
-        await this.view?.webview.postMessage({ type: 'workspaceFileSuggestions', query, requestId, files })
+        await this.postToHosts({ type: 'workspaceFileSuggestions', query, requestId, files })
         break
       }
       case 'openFile': {
@@ -232,7 +274,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       }
       case 'attachSelection': {
         const selection = this.editorSelection.current()
-        await this.view?.webview.postMessage({ type: 'editorSelection', selection })
+        await this.postToHosts({ type: 'editorSelection', selection })
         if (selection === undefined) {
           void vscode.window.showInformationMessage(vscode.l10n.t('Select code in an editor first.'))
         }
@@ -283,7 +325,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
   }
 
   private async publishEditorSelection(): Promise<void> {
-    await this.view?.webview.postMessage({
+    await this.postToHosts({
       type: 'editorSelection',
       selection: this.editorSelection.current(),
     })
