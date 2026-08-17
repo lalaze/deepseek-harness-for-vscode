@@ -8,6 +8,15 @@ interface StreamState {
   rendered: string
   target: string
   frame: number | undefined
+  /** Authoritative adapter-reported reasoning tokens, once the usage chunk lands. */
+  tokens?: number
+  /** Monotonic live estimate so the counter only grows while streaming. */
+  labelTokens?: number
+}
+
+/** Rough live token estimate for streamed reasoning text (≈4 chars/token). */
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.round(text.trim().length / 4))
 }
 
 /** Owns reasoning disclosure state and smooth incremental assistant text. */
@@ -17,7 +26,8 @@ export class StreamingMessageComponent {
   constructor(private readonly options: {
     readonly document: Document
     readonly reasoningLabel: () => string
-    readonly thinkingLabel: () => string
+    /** "Thinking… · 1,234 tokens" once a running reasoning block has text or usage. */
+    readonly thinkingLabel: (tokens?: number) => string
     /** "Thought for 12s · 342 tokens" style label once a reasoning block has known timing. */
     readonly reasoningDoneLabel: (elapsedMs: number, tokens?: number) => string
     readonly renderMarkdown: (target: HTMLElement, source: string) => void
@@ -103,21 +113,22 @@ export class StreamingMessageComponent {
       this.finishStream(target)
       target.textContent = block.text
     } else if (running) {
-      this.stream(target, block.text)
+      this.stream(target, block.text, block.reasoningTokens)
     } else {
       this.finishStream(target)
       this.options.renderMarkdown(target, block.text)
     }
   }
 
-  private stream(target: HTMLElement, text: string): void {
+  private stream(target: HTMLElement, text: string, tokens?: number): void {
     let state = this.streams.get(target)
     if (state === undefined) {
       target.textContent = ''
-      state = { rendered: '', target: text, frame: undefined }
+      state = { rendered: '', target: text, frame: undefined, ...(tokens === undefined ? {} : { tokens }) }
       this.streams.set(target, state)
     } else {
       state.target = text
+      if (tokens !== undefined) state.tokens = tokens
     }
     if (state.frame === undefined) this.schedule(target, state)
   }
@@ -130,10 +141,27 @@ export class StreamingMessageComponent {
       // Render each partial frame as Markdown so formatting appears while streaming,
       // instead of showing raw Markdown source until the block completes.
       this.options.renderMarkdown(target, state.rendered)
-      if (target.classList.contains('reasoning-content')) target.scrollTop = target.scrollHeight
+      if (target.classList.contains('reasoning-content')) {
+        target.scrollTop = target.scrollHeight
+        this.updateStreamingLabel(target, state)
+      }
       this.options.onStreamFrame()
       if (state.rendered !== state.target) this.schedule(target, state)
     })
+  }
+
+  /** Keeps the "Thinking… · N tokens" label ticking while reasoning streams. */
+  private updateStreamingLabel(target: HTMLElement, state: StreamState): void {
+    const label = target.closest('.reasoning-block')?.querySelector('.reasoning-label')
+    if (!(label instanceof HTMLElement)) return
+    if (state.tokens !== undefined) {
+      label.textContent = this.options.thinkingLabel(state.tokens)
+      return
+    }
+    const estimate = estimateTokens(state.rendered)
+    if (estimate <= (state.labelTokens ?? 0)) return
+    state.labelTokens = estimate
+    label.textContent = this.options.thinkingLabel(estimate)
   }
 
   private finishStream(target: HTMLElement): void {
@@ -171,12 +199,20 @@ export class StreamingMessageComponent {
   }
 
   private labelText(running: boolean, block?: ChatBlock): string {
-    if (running) return this.options.thinkingLabel()
+    if (running) return this.options.thinkingLabel(this.liveTokens(block))
     if (block?.duration !== undefined) {
       const elapsed = Math.max(0, (block.duration.endedAt ?? Date.now()) - block.duration.startedAt)
       return this.options.reasoningDoneLabel(elapsed, block.reasoningTokens)
     }
     return this.options.reasoningLabel()
+  }
+
+  /** Adapter-reported count when known, else a live estimate from the streamed text. */
+  private liveTokens(block: ChatBlock | undefined): number | undefined {
+    if (block === undefined || block.kind !== 'reasoning') return undefined
+    if (block.reasoningTokens !== undefined) return block.reasoningTokens
+    if (block.text.trim() === '') return undefined
+    return estimateTokens(block.text)
   }
 
   private chevron(): HTMLElement {

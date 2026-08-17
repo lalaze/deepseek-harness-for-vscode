@@ -513,6 +513,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         <span class="activity-star" aria-hidden="true">✻</span>
         <span class="activity-verb">${text('activityWorking')}</span>
         <span id="activity-elapsed" class="activity-elapsed"></span>
+        <span id="activity-tokens" class="activity-tokens"></span>
         <span class="activity-hint">${text('activityEscHint')}</span>
       </div>
       <section class="composer-shell">

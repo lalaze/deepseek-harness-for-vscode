@@ -65,6 +65,7 @@ const elements = {
   composerStatus: byId('composer-status'),
   activityStatus: byId('activity-status'),
   activityElapsed: byId('activity-elapsed'),
+  activityTokens: byId('activity-tokens'),
   compact: byId('compact'),
 }
 
@@ -128,7 +129,9 @@ const workDuration = createWorkDurationComponent({ document, translate: t })
 const streamingMessage = new StreamingMessageComponent({
   document,
   reasoningLabel: () => t('reasoningProcess'),
-  thinkingLabel: () => t('thinking'),
+  thinkingLabel: (tokens) => tokens === undefined
+    ? t('thinking')
+    : t('thinkingWithTokens', { tokens: formatTokenCount(tokens) }),
   reasoningDoneLabel: (elapsed, tokens) => tokens === undefined
     ? t('thoughtFor', { duration: formatWorkDuration(elapsed) })
     : t('thoughtForWithTokens', { duration: formatWorkDuration(elapsed), tokens: formatTokenCount(tokens) }),
@@ -984,6 +987,7 @@ function renderActivityStatus(active) {
   // this Webview first observed the run (e.g. after a mid-run reload).
   runStartedAt = latestRunningStartedAt(active) ?? runStartedAt ?? Date.now()
   updateActivityElapsed()
+  updateActivityTokens(active)
   if (activityTimer === undefined) activityTimer = setInterval(updateActivityElapsed, 500)
 }
 
@@ -999,6 +1003,33 @@ function latestRunningStartedAt(active) {
 function updateActivityElapsed() {
   if (runStartedAt === undefined) return
   elements.activityElapsed.textContent = formatWorkDuration(Date.now() - runStartedAt)
+}
+
+/** Shows the reasoning tokens currently being emitted by the running step. */
+function updateActivityTokens(active) {
+  const tokens = runningReasoningTokens(active)
+  elements.activityTokens.textContent = tokens === undefined
+    ? ''
+    : t('activityTokens', { tokens: formatTokenCount(tokens) })
+}
+
+/** Sums reasoning tokens of the latest streaming assistant message. */
+function runningReasoningTokens(active) {
+  const messages = active?.messages ?? []
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index]
+    if (item?.kind !== 'message' || item.role !== 'assistant') continue
+    if (item.status !== 'running') break
+    let total = 0
+    let has = false
+    for (const block of item.blocks ?? []) {
+      if (block.kind !== 'reasoning') continue
+      total += block.reasoningTokens ?? estimateReasoningTokens(block.text)
+      has = true
+    }
+    return has ? total : undefined
+  }
+  return undefined
 }
 
 function updateCommandMenu() {
@@ -1360,6 +1391,10 @@ function formatRelativeTime(time) {
 
 function formatTokenCount(count) {
   return Number(count).toLocaleString()
+}
+
+function estimateReasoningTokens(text) {
+  return Math.max(1, Math.round(String(text || '').trim().length / 4))
 }
 
 function cssEscape(value) {

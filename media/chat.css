@@ -329,7 +329,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .reasoning-block summary::-webkit-details-marker { display: none; }
 .reasoning-dot { width: 7px; height: 7px; flex: none; background: var(--vscode-descriptionForeground); border-radius: 50%; }
 .reasoning-block.running .reasoning-dot { background: var(--vscode-progressBar-background); box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-progressBar-background) 16%, transparent); animation: reasoning-pulse 1.2s ease-in-out infinite; }
-.reasoning-label { min-width: 0; flex: 0 0 auto; font-weight: 500; }
+.reasoning-label { min-width: 0; flex: 0 0 auto; color: var(--vscode-descriptionForeground); font-weight: 500; }
 .reasoning-summary {
   min-width: 0;
   flex: 1;
@@ -364,6 +364,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .activity-star { display: inline-block; align-self: center; color: color-mix(in srgb, #c46cff 68%, var(--vscode-progressBar-background)); font-size: 11px; animation: activity-star-spin 1.4s linear infinite; }
 .activity-verb { color: var(--vscode-foreground); animation: activity-verb-pulse 1.6s ease-in-out infinite; }
 .activity-elapsed { font-variant-numeric: tabular-nums; }
+.activity-tokens { color: var(--vscode-descriptionForeground); opacity: .75; font-variant-numeric: tabular-nums; }
 .activity-hint { opacity: .65; }
 @keyframes activity-star-spin { to { transform: rotate(360deg); } }
 @keyframes activity-verb-pulse { 50% { opacity: .5; } }
