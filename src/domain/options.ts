@@ -14,6 +14,7 @@ export const MODEL_OPTIONS = [
 
 export const REASONING_OPTIONS = [
   { id: 'off', label: 'Off', description: 'Disable explicit reasoning.' },
+  { id: 'low', label: 'Low', description: 'Light reasoning for faster answers.' },
   { id: 'high', label: 'High', description: 'Default Harness reasoning effort.' },
   { id: 'max', label: 'Maximum', description: 'Use maximum reasoning effort for complex tasks.' },
 ] as const

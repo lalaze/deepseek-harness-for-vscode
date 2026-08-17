@@ -130,6 +130,7 @@ export function configurationEquals(left: PromptConfiguration, right: PromptConf
 export function effortTone(id: string, index: number, count: number): EffortTone {
   if (id.toLowerCase() === 'off' || index === 0) return 'off'
   if (id.toLowerCase() === 'max' || id.toLowerCase() === 'maximum' || index === count - 1) return 'max'
+  if (id.toLowerCase() === 'low') return 'low'
   return 'high'
 }
 

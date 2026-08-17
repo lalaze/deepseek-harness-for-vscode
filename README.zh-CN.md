@@ -17,7 +17,7 @@
 - **编辑器上下文**：选中代码会显示为可移除的上下文卡片；在输入框键入 `@` 可模糊检索并附加工作区文件。
 - **斜杠命令**：支持 Harness 官方命令及 `/model`、`/reasoning`、`/preset` 扩展命令。
 - **Harness 原生能力**：推理过程、工具调用、审批、结构化问题、Todo、Skills、Goal、Plan 和后台任务。
-- **模型与 Agent 设置**：DeepSeek V4 Flash / Pro、`off` / `high` / `max` 推理等级和四种官方 Agent Preset。
+- **模型与 Agent 设置**：DeepSeek V4 Flash / Pro、`off` / `low` / `high` / `max` 推理等级和四种官方 Agent Preset。
 - **Token 用量**：在输入区显示当前会话输入和输出 Token。
 - **原生 DSH 插件中心**：搜索精选目录、按分类筛选、查看已安装插件，或安装 npm/GitHub/本地/tarball 插件包。
 - **自动本地化**：根据 VS Code 显示语言自动切换英文或简体中文。
@@ -89,7 +89,7 @@
 | 设置 | 默认值 | 说明 |
 |---|---|---|
 | `deepseekHarness.model` | `deepseek-v4-flash` | 新会话默认模型 |
-| `deepseekHarness.reasoningEffort` | `high` | `off` / `high` / `max` |
+| `deepseekHarness.reasoningEffort` | `high` | `off` / `low` / `high` / `max` |
 | `deepseekHarness.agentPreset` | `standard` | 新会话默认 Agent Preset |
 | `deepseekHarness.provider` | `deepseek-official` | 在扩展“连接设置”面板中选择的默认来源 |
 | `deepseekHarness.permissionMode` | `workspace-write` | `read-only` / `workspace-write` / `danger-full-access` |

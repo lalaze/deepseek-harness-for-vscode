@@ -24,7 +24,7 @@ export interface ComposerConfigurationInput {
   readonly fallbackReasoning: readonly ConfigurationOption[]
 }
 
-export type EffortTone = 'off' | 'high' | 'max'
+export type EffortTone = 'off' | 'low' | 'high' | 'max'
 
 export interface ComposerConfigurationSnapshot {
   readonly input: ComposerConfigurationInput

@@ -680,6 +680,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   transition: background-color 160ms ease;
 }
 .effort-control[data-effort='off'] { --effort-color: #8b8b93; }
+.effort-control[data-effort='low'] { --effort-color: #3f9be0; }
 .effort-control[data-effort='high'] { --effort-color: #9b7cff; }
 .effort-control[data-effort='max'] { --effort-color: #e8784f; }
 .effort-main { min-height: 50px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

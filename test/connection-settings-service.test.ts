@@ -63,8 +63,8 @@ describe('ConnectionSettingsService', () => {
 
     expect(route).toBe('volcengine-ark')
     expect(harness.document.piAi.value.providers['volcengine-ark']!.models).toEqual([
-      { id: 'deepseek-v3.1-250828', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
-      { id: 'ep-20250417-xxxxx', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+      { id: 'deepseek-v3.1-250828', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
+      { id: 'ep-20250417-xxxxx', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
     ])
     expect(service.state.providers.find((provider) => provider.id === 'volcengine-ark')?.models)
       .toEqual(['deepseek-v3.1-250828', 'ep-20250417-xxxxx'])
@@ -85,8 +85,8 @@ describe('ConnectionSettingsService', () => {
 
     expect(route).toBe('plain-relay')
     expect(harness.document.piAi.value.providers['plain-relay']!.models).toEqual([
-      { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
-      { id: 'deepseek-v4-pro', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+      { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
+      { id: 'deepseek-v4-pro', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
     ])
   })
 

@@ -176,7 +176,7 @@ export interface WorkbenchLabels {
 
 export const ENGLISH_WORKBENCH_LABELS: WorkbenchLabels = {
   commandModel: 'Switch the current session model (Flash / Pro)',
-  commandReasoning: 'Switch reasoning effort (off / high / max)',
+  commandReasoning: 'Switch reasoning effort (off / low / high / max)',
   commandPreset: 'Switch Agent Preset (standard / code / minimal / cordis)',
   newConversation: 'New conversation',
   toolResult: 'Tool result',
@@ -526,15 +526,15 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   return { messages, todos }
 }
 
-/** Attaches one cumulative footer per turn to its last assistant message. */
+/** Attaches one cumulative footer per turn to its last visible item. */
 function attachTurnDurations(
   messages: ChatItem[],
   messageTurns: ReadonlyMap<string, number>,
   durations: ReadonlyMap<number, TurnDurationView>,
 ): void {
-  // Prefer the turn's last assistant message so the counter stays on the
-  // bottom-most text; fall back to the last visible item when a turn produced
-  // no assistant content (e.g. an immediate failure notice).
+  // Attach to the turn's very last item (which may be a tool card) so the
+  // cumulative timer sits below the tool calls instead of above them.
+  // Falls back to the last assistant message when no last item is recorded.
   const lastAssistantIndex = new Map<number, number>()
   const lastIndex = new Map<number, number>()
   messages.forEach((message, index) => {
@@ -544,7 +544,7 @@ function attachTurnDurations(
     if (message.kind === 'message' && message.role === 'assistant') lastAssistantIndex.set(turn, index)
   })
   for (const [turn, duration] of durations) {
-    const index = lastAssistantIndex.get(turn) ?? lastIndex.get(turn)
+    const index = lastIndex.get(turn) ?? lastAssistantIndex.get(turn)
     const message = index === undefined ? undefined : messages[index]
     if (index !== undefined && message !== undefined && message.workDuration === undefined) {
       messages[index] = { ...message, workDuration: duration }

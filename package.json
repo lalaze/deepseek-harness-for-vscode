@@ -138,11 +138,13 @@
           "type": "string",
           "enum": [
             "off",
+            "low",
             "high",
             "max"
           ],
           "enumDescriptions": [
             "%config.reasoning.off%",
+            "%config.reasoning.low%",
             "%config.reasoning.high%",
             "%config.reasoning.max%"
           ],

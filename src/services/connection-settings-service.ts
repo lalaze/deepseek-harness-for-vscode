@@ -356,7 +356,7 @@ function relayModels(models: readonly string[]): { id: string; reasoningEfforts:
   const ids = models.length > 0 ? models : ['deepseek-v4-flash', 'deepseek-v4-pro']
   return ids.map((id) => ({
     id,
-    reasoningEfforts: { off: null, high: 'high', max: 'max' },
+    reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
   }))
 }
 

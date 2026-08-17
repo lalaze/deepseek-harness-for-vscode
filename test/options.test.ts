@@ -14,7 +14,7 @@ describe('official Harness option catalogs', () => {
   })
 
   it('contains the official reasoning and preset ids', () => {
-    expect(REASONING_OPTIONS.map((item) => item.id)).toEqual(['off', 'high', 'max'])
+    expect(REASONING_OPTIONS.map((item) => item.id)).toEqual(['off', 'low', 'high', 'max'])
     expect(AGENT_PRESET_OPTIONS.map((item) => item.id)).toEqual(['standard', 'code', 'minimal', 'cordis'])
   })
 

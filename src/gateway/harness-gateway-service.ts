@@ -1002,7 +1002,7 @@ function subagentView(entry: SubagentListEntry): SubagentView {
 function localizedWorkbenchLabels(): WorkbenchLabels {
   return {
     commandModel: vscode.l10n.t('Switch the current session model (Flash / Pro)'),
-    commandReasoning: vscode.l10n.t('Switch reasoning effort (off / high / max)'),
+    commandReasoning: vscode.l10n.t('Switch reasoning effort (off / low / high / max)'),
     commandPreset: vscode.l10n.t('Switch Agent Preset (standard / code / minimal / cordis)'),
     newConversation: vscode.l10n.t('New conversation'),
     toolResult: vscode.l10n.t('Tool result'),

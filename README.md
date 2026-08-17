@@ -17,7 +17,7 @@ A native VS Code coding-agent extension powered by [DeepSeek Harness](https://gi
 - **Editor context** — selected code appears as a removable context card; type `@` to fuzzy-search and attach workspace files without leaving the composer.
 - **Slash commands** — use official Harness commands plus `/model`, `/reasoning`, and `/preset` extension commands.
 - **Harness-native capabilities** — reasoning, tool calls, approvals, structured questions, Todos, Skills, Goals, Plan mode, and background jobs.
-- **Model and agent controls** — DeepSeek V4 Flash / Pro, `off` / `high` / `max` reasoning effort, and four official Agent Presets.
+- **Model and agent controls** — DeepSeek V4 Flash / Pro, `off` / `low` / `high` / `max` reasoning effort, and four official Agent Presets.
 - **Token usage** — see current input and output token counts in the composer.
 - **Native DSH plugin center** — search a curated catalog, filter by category, inspect installed plugins, or install an npm/GitHub/local/tarball package.
 - **Automatic localization** — follows the VS Code display language with English and Simplified Chinese support.
@@ -89,7 +89,7 @@ Marketplace cards classify known entries as **Agent compatible**, **Agent works 
 | Setting                               | Default             | Description                                                            |
 | ------------------------------------- | ------------------- | ---------------------------------------------------------------------- |
 | `deepseekHarness.model`               | `deepseek-v4-flash` | Default model for new sessions                                         |
-| `deepseekHarness.reasoningEffort`     | `high`              | `off` / `high` / `max`                                                 |
+| `deepseekHarness.reasoningEffort`     | `high`              | `off` / `low` / `high` / `max`                                                 |
 | `deepseekHarness.agentPreset`         | `standard`          | Default Agent Preset for new sessions                                  |
 | `deepseekHarness.provider`            | `deepseek-official` | Default source selected from the extension's Connection settings panel |
 | `deepseekHarness.permissionMode`      | `workspace-write`   | `read-only` / `workspace-write` / `danger-full-access`                 |

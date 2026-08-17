@@ -72,9 +72,10 @@ describe('composer configuration store', () => {
   })
 
   it('maps effort stops to distinct visual tones', () => {
-    expect(effortTone('off', 0, 3)).toBe('off')
-    expect(effortTone('high', 1, 3)).toBe('high')
-    expect(effortTone('max', 2, 3)).toBe('max')
+    expect(effortTone('off', 0, 4)).toBe('off')
+    expect(effortTone('low', 1, 4)).toBe('low')
+    expect(effortTone('high', 2, 4)).toBe('high')
+    expect(effortTone('max', 3, 4)).toBe('max')
   })
 
   it('switches source without duplicating the two model choices', () => {

@@ -12,6 +12,7 @@
   "config.model.pro": "DeepSeek V4 Pro，适合复杂编码与长链路推理。",
   "config.reasoning": "DeepSeek Harness 推理等级。",
   "config.reasoning.off": "关闭显式推理。",
+  "config.reasoning.low": "低推理强度，回答更快。",
   "config.reasoning.high": "高推理强度（Harness 默认值）。",
   "config.reasoning.max": "最高推理强度。",
   "config.preset": "Harness 新会话默认使用的官方 Agent Preset。",
