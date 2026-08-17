@@ -566,7 +566,9 @@ function renderMessage(item, conclusionId) {
   const body = node('div', 'message-body')
   streamingMessage.render(body, item)
   article.append(body)
-  workDuration.update(article, item.status === 'running' ? undefined : item.workDuration)
+  // Always render the footer: while the turn runs it ticks up from turn/start,
+  // and once the turn ends it freezes at the total.
+  workDuration.update(article, item.workDuration)
   if (item.role === 'assistant' && item.id === conclusionId) article.append(createCopyFooter(item))
   return article
 }
@@ -593,7 +595,6 @@ function renderTool(item) {
     details.append(detail)
   }
   container.append(details)
-  workDuration.update(container, item.status === 'running' ? undefined : item.workDuration)
   return container
 }
 
@@ -1305,7 +1306,7 @@ function patchStreamingMessage(element, item) {
   const body = element.querySelector('.message-body')
   if (!body) return false
   if (!streamingMessage.patch(body, item)) return false
-  workDuration.update(element, item.status === 'running' ? undefined : item.workDuration)
+  workDuration.update(element, item.workDuration)
   return true
 }
 

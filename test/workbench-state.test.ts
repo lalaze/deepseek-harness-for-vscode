@@ -45,7 +45,7 @@ describe('projectConversation', () => {
 
     const messages = projectConversation(entries).messages
     expect(messages[0]).toMatchObject({ id: 'tool-c1-call', status: 'success' })
-    expect(messages[0]?.workDuration).toEqual({ startedAt: 1, endedAt: 2 })
+    expect(messages[0]?.workDuration).toBeUndefined()
     expect(messages[1]).toMatchObject({ id: 'tool-c1-result', status: 'success' })
   })
 
@@ -126,7 +126,7 @@ describe('projectConversation', () => {
     ])
   })
 
-  it('shows one turn duration on the final visible result', () => {
+  it('shows one cumulative turn duration on the last assistant message', () => {
     const entries = [
       timedEntry(0, 1_000, 'turn/start', { turn: 1 }),
       timedEntry(1, 1_200, 'assistant/message', {
@@ -144,8 +144,44 @@ describe('projectConversation', () => {
     ] as HistoryEntry[]
 
     const messages = projectConversation(entries).messages
-    expect(messages[0]?.workDuration).toBeUndefined()
-    expect(messages[1]?.workDuration).toEqual({ startedAt: 1_000, endedAt: 4_600 })
+    // The cumulative counter lives on the assistant message, not the tool card.
+    expect(messages[0]?.workDuration).toEqual({ startedAt: 1_000, endedAt: 4_600 })
+    expect(messages[1]?.workDuration).toBeUndefined()
+  })
+
+  it('keeps one cumulative turn counter across a multi-step run', () => {
+    const entries = [
+      timedEntry(0, 1_000, 'turn/start', { turn: 1 }),
+      timedEntry(1, 1_100, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'block-start', index: 0, blockType: 'reasoning' },
+      }),
+      timedEntry(2, 1_200, 'assistant/chunk', {
+        turn: 1, step: 1,
+        chunk: { type: 'reasoning-delta', index: 0, text: '分析' },
+      }),
+      timedEntry(3, 2_000, 'tool/call', { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{"command":"ls"}' }),
+      timedEntry(4, 2_500, 'tool/result', {
+        turn: 1, step: 1, error: undefined,
+        message: { id: 'r1', role: 'tool', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'text', text: 'ok' }] },
+      }),
+      timedEntry(5, 3_000, 'assistant/chunk', {
+        turn: 1, step: 2,
+        chunk: { type: 'block-start', index: 0, blockType: 'text' },
+      }),
+      timedEntry(6, 3_100, 'assistant/chunk', {
+        turn: 1, step: 2,
+        chunk: { type: 'text-delta', index: 0, text: '结论' },
+      }),
+    ] as HistoryEntry[]
+
+    const messages = projectConversation(entries).messages
+    // The running turn counter starts at turn/start (1_000) on the latest
+    // assistant message; tool cards never carry their own timer.
+    expect(messages.find((message) => message.id === 'partial-1:2')?.workDuration)
+      .toEqual({ startedAt: 1_000 })
+    expect(messages.find((message) => message.id === 'tool-c1-call')?.workDuration).toBeUndefined()
+    expect(messages.filter((message) => message.workDuration !== undefined)).toHaveLength(1)
   })
 })
 

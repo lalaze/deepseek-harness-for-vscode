@@ -42,8 +42,9 @@ export interface ChatItem {
   readonly blocks?: readonly ChatBlock[]
   readonly detail?: string
   /**
-   * Turn timing, attached to the turn's last visible item that has no timing
-   * of its own; tool call items carry their own call duration instead.
+   * Turn timing, attached to the turn's last assistant message so the
+   * cumulative "worked for" counter lives at the bottom of the turn; tool
+   * cards intentionally carry no timer of their own (Claude Code style).
    */
   readonly workDuration?: TurnDurationView
 }
@@ -415,7 +416,6 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
           title: event.data.name,
           status: 'running',
           detail: prettyJson(event.data.arguments),
-          workDuration: { startedAt: event.time },
         }, event.data.turn)
         break
       }
@@ -425,11 +425,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         const callIndex = messages.findIndex((item) => item.id === `tool-${callId}-call`)
         const call = messages[callIndex]
         if (call !== undefined) {
-          messages[callIndex] = {
-            ...call,
-            status,
-            workDuration: { startedAt: call.time, endedAt: Math.max(call.time, event.time) },
-          }
+          messages[callIndex] = { ...call, status }
         }
         addMessage({
           id: `tool-${callId}-result`,
@@ -501,19 +497,25 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
   return { messages, todos }
 }
 
-/** Attaches one footer per turn to the chronologically last visible result. */
+/** Attaches one cumulative footer per turn to its last assistant message. */
 function attachTurnDurations(
   messages: ChatItem[],
   messageTurns: ReadonlyMap<string, number>,
   durations: ReadonlyMap<number, TurnDurationView>,
 ): void {
-  const lastMessageIndex = new Map<number, number>()
+  // Prefer the turn's last assistant message so the counter stays on the
+  // bottom-most text; fall back to the last visible item when a turn produced
+  // no assistant content (e.g. an immediate failure notice).
+  const lastAssistantIndex = new Map<number, number>()
+  const lastIndex = new Map<number, number>()
   messages.forEach((message, index) => {
     const turn = messageTurns.get(message.id)
-    if (turn !== undefined) lastMessageIndex.set(turn, index)
+    if (turn === undefined) return
+    lastIndex.set(turn, index)
+    if (message.kind === 'message' && message.role === 'assistant') lastAssistantIndex.set(turn, index)
   })
   for (const [turn, duration] of durations) {
-    const index = lastMessageIndex.get(turn)
+    const index = lastAssistantIndex.get(turn) ?? lastIndex.get(turn)
     const message = index === undefined ? undefined : messages[index]
     if (index !== undefined && message !== undefined && message.workDuration === undefined) {
       messages[index] = { ...message, workDuration: duration }
