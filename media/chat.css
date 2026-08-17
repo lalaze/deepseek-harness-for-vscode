@@ -358,18 +358,23 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   24% { transform: translateY(-6px); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .streaming-indicator-dot, .reasoning-block.running .reasoning-dot, .tool-card.running .tool-status, .startup-logo, .startup-dots span, .activity-star, .activity-star svg path, .activity-verb { animation: none; }
+  .streaming-indicator-dot, .reasoning-block.running .reasoning-dot, .tool-card.running .tool-status, .startup-logo, .startup-dots span, .activity-star, .activity-spout .drop, .activity-verb { animation: none; }
 }
 .activity-status { padding: 0 14px 5px; display: flex; align-items: baseline; gap: 7px; color: var(--vscode-descriptionForeground); font-size: 10px; }
-.activity-star { display: inline-flex; align-items: center; align-self: center; color: var(--vscode-foreground); line-height: 0; }
+.activity-star { position: relative; display: inline-flex; align-items: center; align-self: center; color: var(--vscode-foreground); line-height: 0; }
 .activity-star svg { display: block; }
-.activity-star svg path { animation: activity-star-blink 1s linear infinite; }
+.activity-spout { position: absolute; left: 3px; top: 1px; width: 6px; height: 0; pointer-events: none; }
+.drop { position: absolute; top: 0; left: 0; width: 2px; height: 2px; border-radius: 50%; background: #4d6bfe; box-shadow: 0 0 1px rgba(77, 107, 254, .8); opacity: 0; animation: activity-spout 1.1s ease-out infinite; }
+.drop.d2 { left: 2px; animation-delay: .35s; }
+.drop.d3 { left: 4px; animation-delay: .7s; }
 .activity-verb { color: var(--vscode-foreground); animation: activity-verb-pulse 1.6s ease-in-out infinite; }
 .activity-elapsed { font-variant-numeric: tabular-nums; }
 .activity-hint { opacity: .65; }
-@keyframes activity-star-blink {
-  0%, 50% { fill: #ffffff; }
-  51%, 100% { fill: #000000; }
+@keyframes activity-spout {
+  0% { transform: translateY(0) scale(.6); opacity: 0; }
+  12% { opacity: .95; }
+  55% { opacity: .8; transform: translateY(-4px) scale(1); }
+  100% { transform: translateY(-9px) scale(.4); opacity: 0; }
 }
 @keyframes activity-verb-pulse { 50% { opacity: .5; } }
 .context-card pre { margin: 4px 7px 6px; white-space: pre-wrap; font: inherit; font-size: 11px; }
