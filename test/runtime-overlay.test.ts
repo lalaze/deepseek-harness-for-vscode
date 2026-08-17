@@ -41,8 +41,10 @@ describe('Harness Web profile overlay', () => {
       webSearch: false,
       autoAttachSelection: true,
     }, '/extension/dist/runtime/gateway-runtime.mjs')
-    expect(overlay).toContain('- id: web-search-deepseek')
-    expect(overlay).toContain('disabled: true')
+    const rows = load(overlay) as Array<{ id?: string; disabled?: boolean }>
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'web-search-deepseek', disabled: true }),
+    ]))
     expect(() => load(overlay)).not.toThrow()
   })
 

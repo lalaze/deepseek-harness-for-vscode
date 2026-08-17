@@ -328,10 +328,12 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         if (exportId === undefined) throw new Error(vscode.l10n.t('Create or select a session first.'))
         const filename = exportFilename(exportId)
         // Ask for the destination before downloading so a cancelled dialog
-        // does not waste a potentially large ZIP transfer.
+        // does not waste a potentially large ZIP transfer. Uri.file needs an
+        // absolute path, so anchor the default name in the workspace folder.
+        const defaultFolder = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(process.cwd())
         const target = await vscode.window.showSaveDialog({
           title: vscode.l10n.t('Export Harness session'),
-          defaultUri: vscode.Uri.file(filename),
+          defaultUri: vscode.Uri.joinPath(defaultFolder, filename),
           filters: { 'ZIP archive': ['zip'] },
         })
         if (target === undefined) break
