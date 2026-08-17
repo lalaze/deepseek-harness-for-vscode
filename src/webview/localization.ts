@@ -137,7 +137,6 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   thoughtFor: 'Thought for {duration}',
   thoughtForWithTokens: 'Thought for {duration} · {tokens} tokens',
   workedFor: 'Worked for {duration}',
-  activityTokens: '· {tokens} tokens',
   tool: 'Tool',
   toolArguments: 'Arguments',
   toolResult: 'Tool result',
