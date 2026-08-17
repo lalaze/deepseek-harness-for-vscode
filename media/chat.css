@@ -394,6 +394,8 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .tool-card.error .tool-status { color: var(--vscode-testing-iconFailed); }
 @keyframes tool-blink { 50% { opacity: .35; transform: scale(.85); } }
 .tool-detail { max-height: 250px; margin: 0; padding: 8px; overflow: auto; color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; line-height: 1.5; }
+.tool-section-label { padding: 6px 8px 0; color: var(--vscode-descriptionForeground); font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+.tool-detail + .tool-section-label { border-top: 1px solid var(--vscode-widget-border); padding-top: 5px; margin-top: 4px; }
 .tool-detail.markdown-body { white-space: normal; font-family: inherit; }
 .tool-detail.markdown-body > :first-child { margin-top: 0; }
 .tool-detail.markdown-body > :last-child { margin-bottom: 0; }

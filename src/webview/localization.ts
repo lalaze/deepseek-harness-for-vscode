@@ -137,6 +137,8 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   thoughtForWithTokens: 'Thought for {duration} · {tokens} tokens',
   workedFor: 'Worked for {duration}',
   tool: 'Tool',
+  toolArguments: 'Arguments',
+  toolResult: 'Tool result',
   approvalRequired: 'Approval required: {tool}',
   reject: 'Reject',
   allowOnce: 'Allow once',

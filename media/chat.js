@@ -580,10 +580,10 @@ function renderTool(item) {
   const details = node('details', `tool-card ${item.status || ''}`)
   details.dataset.disclosureKey = 'tool'
   const summary = node('summary')
-  // Tool calls show a per-tool glyph; tool results show a status mark instead
-  // of a shared round dot.
-  const isResult = String(item.id || '').endsWith('-result')
-  const icon = isResult
+  // One merged row per tool: a per-tool glyph on the call card; standalone
+  // result cards (call missing from this history page) keep a status mark.
+  const isResultOnly = String(item.id || '').endsWith('-result')
+  const icon = isResultOnly
     ? (item.status === 'error' ? '✕' : '✓')
     : toolIcon(item.title)
   summary.append(node('span', 'tool-status', icon), node('span', 'tool-title', toolDisplayName(item.title || t('tool'))))
@@ -592,9 +592,16 @@ function renderTool(item) {
   }
   details.append(summary)
   if (item.detail && item.detail.trim() !== '') {
+    details.append(node('div', 'tool-section-label', t('toolArguments')))
     const detail = node('div', 'tool-detail')
     renderToolDetail(detail, item.detail)
     details.append(detail)
+  }
+  if (item.result && item.result.trim() !== '') {
+    details.append(node('div', 'tool-section-label', t('toolResult')))
+    const result = node('div', 'tool-detail')
+    renderToolDetail(result, item.result)
+    details.append(result)
   }
   container.append(details)
   return container

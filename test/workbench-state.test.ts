@@ -34,7 +34,7 @@ describe('projectConversation', () => {
     expect(result.todos).toEqual([{ content: '运行测试', status: 'in_progress' }])
   })
 
-  it('marks the tool call card completed when its result arrives', () => {
+  it('merges the tool call and its result into one card', () => {
     const entries = [
       entry(0, 'tool/call', { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{"command":"ls"}' }),
       entry(1, 'tool/result', {
@@ -44,9 +44,28 @@ describe('projectConversation', () => {
     ] as HistoryEntry[]
 
     const messages = projectConversation(entries).messages
-    expect(messages[0]).toMatchObject({ id: 'tool-c1-call', status: 'success' })
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
+      id: 'tool-c1',
+      title: 'bash',
+      status: 'success',
+      detail: '{\n  "command": "ls"\n}',
+      result: 'done',
+    })
     expect(messages[0]?.workDuration).toBeUndefined()
-    expect(messages[1]).toMatchObject({ id: 'tool-c1-result', status: 'success' })
+  })
+
+  it('keeps a standalone result card when the call is absent from the page', () => {
+    const entries = [
+      entry(0, 'tool/result', {
+        turn: 1, step: 1, error: undefined,
+        message: { id: 'r1', role: 'tool', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'text', text: 'ok' }] },
+      }),
+    ] as HistoryEntry[]
+
+    const messages = projectConversation(entries).messages
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({ id: 'tool-c1-result', status: 'success', detail: 'ok' })
   })
 
   it('shows streamed chunks only until their finalized assistant message exists', () => {
@@ -227,7 +246,7 @@ describe('projectConversation', () => {
     // assistant message; tool cards never carry their own timer.
     expect(messages.find((message) => message.id === 'partial-1:2')?.workDuration)
       .toEqual({ startedAt: 1_000 })
-    expect(messages.find((message) => message.id === 'tool-c1-call')?.workDuration).toBeUndefined()
+    expect(messages.find((message) => message.id === 'tool-c1')?.workDuration).toBeUndefined()
     expect(messages.filter((message) => message.workDuration !== undefined)).toHaveLength(1)
   })
 })

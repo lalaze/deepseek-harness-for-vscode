@@ -66,6 +66,7 @@
   "Switch reasoning effort (off / high / max)": "切换推理等级（off / high / max）",
   "Switch Agent Preset (standard / code / minimal / cordis)": "切换 Agent Preset（standard / code / minimal / cordis）",
   "New conversation": "新对话",
+  "Arguments": "参数",
   "Tool result": "工具结果",
   "Slash command": "斜杠命令",
   "[Image attachment]": "[图片附件]",

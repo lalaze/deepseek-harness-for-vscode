@@ -43,6 +43,8 @@ export interface ChatItem {
   readonly status?: 'running' | 'success' | 'error' | 'info'
   readonly blocks?: readonly ChatBlock[]
   readonly detail?: string
+  /** Tool result text; present on a merged tool item once its result arrives. */
+  readonly result?: string
   /**
    * Turn timing, attached to the turn's last assistant message so the
    * cumulative "worked for" counter lives at the bottom of the turn; tool
@@ -418,7 +420,7 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
       }
       case 'tool/call': {
         addMessage({
-          id: `tool-${String(event.data.callId)}-call`,
+          id: `tool-${String(event.data.callId)}`,
           seq: event.seq,
           time: event.time,
           kind: 'tool',
@@ -429,22 +431,27 @@ export function projectConversation(entries: readonly HistoryEntry[], labels = E
         break
       }
       case 'tool/result': {
+        // Merge the result into its call card so one tool reads as one row;
+        // a standalone card is kept only when the call is absent from this
+        // history page (out-of-order tail).
         const callId = String(event.data.message.source.callId)
         const status = event.data.error === undefined ? 'success' : 'error'
-        const callIndex = messages.findIndex((item) => item.id === `tool-${callId}-call`)
+        const result = blockText(event.data.message.content, labels)
+        const callIndex = messages.findIndex((item) => item.id === `tool-${callId}`)
         const call = messages[callIndex]
         if (call !== undefined) {
-          messages[callIndex] = { ...call, status }
+          messages[callIndex] = { ...call, status, result }
+        } else {
+          addMessage({
+            id: `tool-${callId}-result`,
+            seq: event.seq,
+            time: event.time,
+            kind: 'tool',
+            title: labels.toolResult,
+            status,
+            detail: result,
+          }, event.data.turn)
         }
-        addMessage({
-          id: `tool-${callId}-result`,
-          seq: event.seq,
-          time: event.time,
-          kind: 'tool',
-          title: labels.toolResult,
-          status,
-          detail: blockText(event.data.message.content, labels),
-        }, event.data.turn)
         break
       }
       case 'command/run': {
