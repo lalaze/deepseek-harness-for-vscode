@@ -385,6 +385,8 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 @keyframes pulse { 50% { opacity: .35; } }
 
 .tool-card, .context-card { border: 1px solid var(--vscode-widget-border); border-radius: 10px; overflow: hidden; }
+/* Give consecutive tool cards more breathing room than the default message gap. */
+.tool-item + .tool-item { margin-top: 8px; }
 .tool-card summary, .context-card summary { padding: 6px 8px; display: flex; align-items: center; gap: 7px; cursor: pointer; background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent); font-size: 11px; }
 .tool-status { width: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--vscode-descriptionForeground); font-size: 11px; line-height: 1; }
 .tool-card.running .tool-status { color: var(--vscode-charts-blue, #4d8cff); animation: tool-blink 1s ease-in-out infinite; }
