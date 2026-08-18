@@ -48,7 +48,7 @@ describe('Harness Web profile overlay', () => {
     expect(() => load(overlay)).not.toThrow()
   })
 
-  it('disables thinking and safely quotes provider ids', () => {
+  it('passes the off reasoning effort through and safely quotes provider ids', () => {
     const overlay = renderOverlay({
       model: 'deepseek-v4-flash',
       reasoningEffort: 'off',
@@ -58,7 +58,8 @@ describe('Harness Web profile overlay', () => {
       webSearch: true,
       autoAttachSelection: false,
     }, 'C:\\Extensions\\DeepSeek Harness\\gateway-runtime.mjs')
-    expect(overlay).toContain('thinking: disabled')
+    expect(overlay).toContain('reasoningEffort: off')
+    expect(overlay).not.toContain('thinking:')
     expect(overlay).toContain('provider: "custom: route"')
     expect(overlay).toContain('defaultPreset: read-only')
     expect(() => load(overlay)).not.toThrow()

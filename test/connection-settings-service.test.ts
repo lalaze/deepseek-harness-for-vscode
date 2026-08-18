@@ -183,7 +183,7 @@ describe('ConnectionSettingsService', () => {
     })).rejects.toThrow('custom provider')
   })
 
-  it('removes the managed credential before removing a custom profile', async () => {
+  it('removes the custom profile and its managed credential', async () => {
     const harness = fakeHarness({
       packycode: {
         displayName: 'PackyCode',
@@ -201,6 +201,29 @@ describe('ConnectionSettingsService', () => {
     expect(harness.document.credentials.PROVIDER_PACKYCODE_API_KEY).toBeUndefined()
     expect(harness.document.piAi.value.providers.packycode).toBeUndefined()
     expect(service.state.providers.map((provider) => provider.id)).toEqual(['deepseek-official'])
+  })
+
+  it('keeps the credential when the profile deletion is rejected', async () => {
+    const harness = fakeHarness({
+      packycode: {
+        displayName: 'PackyCode',
+        baseURL: 'https://relay.example/v1',
+        api: 'openai-completions',
+        apiKeyEnv: 'PROVIDER_PACKYCODE_API_KEY',
+        models: deepSeekModels(),
+      },
+    }, { PROVIDER_PACKYCODE_API_KEY: 'stored-secret' })
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    // Simulate a stale-revision write: the profile deletion is refused before
+    // the credential is ever touched.
+    const settings = harness.client.settings as { mutate: () => Promise<unknown> }
+    settings.mutate = () => Promise.resolve({ rpcId: 'test', result: { ok: false, error: { message: 'settings-conflict' } } })
+
+    await expect(service.remove('packycode')).rejects.toThrow('settings-conflict')
+    expect(harness.document.credentials.PROVIDER_PACKYCODE_API_KEY).toBe('stored-secret')
+    expect(harness.document.piAi.value.providers.packycode).toBeDefined()
   })
 
   it('finishes migrating a legacy key when its provider profile already exists', async () => {

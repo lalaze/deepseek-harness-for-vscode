@@ -42,6 +42,7 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
   let state: ConnectionSettingsState = { writable: false, providers: [] }
   let defaultProvider = DEEPSEEK_OFFICIAL_PROVIDER
   let activeProvider: string | undefined
+  let confirmingRemove = false
 
   const selected = (): ConnectionProviderView | undefined => state.providers.find((item) => item.id === providerSelect.value)
   const input = (): Record<string, unknown> => ({
@@ -76,6 +77,9 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
     nameField.classList.toggle('hidden', official)
     remove.classList.toggle('hidden', official || creating || provider?.removable !== true)
     remove.disabled = provider === undefined || provider.id === activeProvider
+    confirmingRemove = false
+    remove.textContent = t('remove')
+    remove.classList.remove('danger')
     name.value = provider?.name ?? ''
     name.disabled = !state.writable || (!creating && provider === undefined)
     baseUrl.value = provider?.baseUrl ?? (official ? 'https://api.deepseek.com' : '')
@@ -137,6 +141,13 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
   remove.addEventListener('click', () => {
     const provider = selected()
     if (provider === undefined || remove.disabled) return
+    if (!confirmingRemove) {
+      confirmingRemove = true
+      remove.textContent = t('confirmRemove')
+      remove.classList.add('danger')
+      return
+    }
+    confirmingRemove = false
     post('removeProvider', { provider: provider.id })
     panel.classList.add('hidden')
   })

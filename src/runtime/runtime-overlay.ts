@@ -3,7 +3,6 @@ import type { HarnessConfiguration } from '../config/configuration.js'
 
 /** Generates a trusted overlay from validated VS Code settings. */
 export function renderOverlay(configuration: HarnessConfiguration, gatewayPluginPath: string): string {
-  const thinking = configuration.reasoningEffort === 'off' ? 'disabled' : 'enabled'
   const webSearchRow = configuration.webSearch ? '' : `- id: web-search-deepseek
   disabled: true
 
@@ -23,7 +22,6 @@ export function renderOverlay(configuration: HarnessConfiguration, gatewayPlugin
 
 ${webSearchRow}- id: llm-deepseek
   config:
-    thinking: ${thinking}
     reasoningEffort: ${configuration.reasoningEffort}
 
 - id: agent-default-model

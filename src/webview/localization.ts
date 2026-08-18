@@ -64,6 +64,7 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   providerName: 'Name',
   providerNamePlaceholder: 'Provider name',
   addProvider: 'Add provider…',
+  confirmRemove: 'Confirm removal',
   apiKey: 'API Key',
   apiKeyPlaceholder: 'Enter a new API Key',
   apiKeyKeepPlaceholder: 'Configured — leave blank to keep it',
