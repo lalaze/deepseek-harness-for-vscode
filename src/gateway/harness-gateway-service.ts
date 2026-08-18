@@ -155,7 +155,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   async snapshot(): Promise<HarnessWorkbenchState> {
-    const hasApiKey = this.connectionSettings.hasConfiguredProvider
+    const hasApiKey = this.connectionSettings.hasConfiguredProvider()
     const summaries = this.orderedSummaries().map((summary) => sessionListItem(summary, this.labels))
     const activeSummary = this.activeSessionId === undefined ? undefined : this.summaries.get(this.activeSessionId)
     const projected = projectConversation(this.entries, this.labels)

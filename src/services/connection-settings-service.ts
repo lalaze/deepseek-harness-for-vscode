@@ -62,7 +62,7 @@ export class ConnectionSettingsService {
     return this.client !== undefined
   }
 
-  get hasConfiguredProvider(): boolean {
+  hasConfiguredProvider(): boolean {
     return this.stateValue.providers.some((provider) => provider.apiKeyConfigured)
   }
 
@@ -178,13 +178,17 @@ export class ConnectionSettingsService {
     const client = this.requireClient()
     const namespace = await this.namespace(PI_AI_SETTINGS_NS)
     const ref = credentialRefForProfile(valueAt(namespace.value, ['providers', provider]), provider)
-    const credential = valueOf(await client.credentials.describe({ refs: [ref] })).credentials[ref]
-    if (credential?.configured === true && credential.writable) valueOf(await client.credentials.unset({ ref }))
+    // Delete the profile first: if this write fails on a stale revision, the
+    // credential is still intact, so the user never loses a key for a provider
+    // that still exists. A credential unset that fails afterwards leaves only
+    // an invisible orphan key, which is safe.
     valueOf(await client.settings.mutate({
       ns: PI_AI_SETTINGS_NS,
       ops: [{ op: 'unset', path: ['providers', provider] }],
       expectedRevision: namespace.revision,
     }))
+    const credential = valueOf(await client.credentials.describe({ refs: [ref] })).credentials[ref]
+    if (credential?.configured === true && credential.writable) valueOf(await client.credentials.unset({ ref }))
     await this.refresh()
   }
 

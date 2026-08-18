@@ -195,6 +195,7 @@
   "Name": "名称",
   "Provider name": "提供商名称",
   "Add provider…": "添加提供商…",
+  "Confirm removal": "确认移除",
   "API Key": "API Key",
   "Enter a new API Key": "输入新的 API KEY",
   "Configured — leave blank to keep it": "已配置；留空可保留现有密钥",
