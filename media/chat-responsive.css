@@ -117,7 +117,7 @@ body {
     text-align: left;
   }
 
-  .permission-select {
+  .permission-toggle {
     width: min(138px, 40vw);
     min-width: min(116px, 100%);
   }
@@ -150,7 +150,7 @@ body {
     max-width: calc(100% - 36px);
   }
 
-  .permission-select {
+  .permission-toggle {
     width: auto;
     min-width: 88px;
     max-width: 116px;

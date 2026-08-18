@@ -29,6 +29,6 @@ describe('responsive workbench layout', () => {
     expect(css).toContain('@media (max-width: 680px)')
     expect(css).toContain('@media (max-width: 360px)')
     expect(css).toMatch(/grid-template-areas:\s*'tools'\s*'meta'\s*'actions'/)
-    expect(css).toMatch(/\.permission-select\s*{[^}]*min-width:\s*88px/s)
+    expect(css).toMatch(/\.permission-toggle\s*{[^}]*min-width:\s*88px/s)
   })
 })

@@ -582,7 +582,17 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
             <button id="attach-selection" class="text-button" title="${text('attachSelection')}">⬒ ${text('selection')}</button>
             <button id="timeline-toggle" class="text-button" title="${text('timeline')}">◷ ${text('timeline')}</button>
             <button id="details-toggle" class="text-button" title="${text('contextDescription')}">${text('context')}</button>
-            <select id="permission" class="permission-select hidden" title="${text('permissionDescription')}"></select>
+            <div id="permission" class="permission-picker hidden">
+              <button id="permission-toggle" class="permission-toggle" type="button" title="${text('permissionDescription')}" aria-label="${text('permissionDescription')}" aria-haspopup="listbox" aria-expanded="false">
+                <span class="permission-toggle-icon">◈</span>
+                <span id="permission-toggle-label" class="permission-toggle-label"></span>
+                <span class="permission-toggle-chevron">⌄</span>
+              </button>
+              <div id="permission-popup" class="permission-popup hidden" role="listbox" aria-label="${text('permissionDescription')}">
+                <div class="permission-popup-title">${text('permissionLabel')}</div>
+                <div id="permission-options" class="permission-options" role="presentation"></div>
+              </div>
+            </div>
           </div>
           <div class="composer-meta">
             <span id="composer-status" class="composer-status"></span>

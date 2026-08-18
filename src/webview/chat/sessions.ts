@@ -1,4 +1,4 @@
-import type { ActiveSessionView } from '../../domain/workbench-state.js'
+import type { ActiveSessionView, PermissionView } from '../../domain/workbench-state.js'
 import { composerConfigurationInput } from '../composer-configuration/adapter.js'
 import { permissionSelectOptions } from '../permission/adapter.js'
 import { clearPastedImages } from './images.js'
@@ -66,30 +66,64 @@ export function renderSelectors(active: ActiveSessionView | undefined): void {
   components.composerConfiguration.update(composerConfigurationInput(payload))
   const permissions = active?.permissions
   if (permissions) {
-    replaceOptions(elements.permission, permissionSelectOptions(permissions), permissions.currentValue)
+    renderPermissionOptions(permissions)
     elements.permission.classList.remove('hidden')
-    elements.permission.disabled = active.running || payload.state.phase !== 'connected'
+    elements.permissionToggle.disabled = active?.running === true || payload.state.phase !== 'connected'
   } else {
     elements.permission.classList.add('hidden')
+    closePermissionPopup()
   }
 }
 
-function replaceOptions(
-  select: HTMLSelectElement,
-  options: readonly { readonly id: string; readonly label?: string; readonly name?: string; readonly description?: string; readonly disabled?: boolean }[],
-  selected: string,
-): void {
+function renderPermissionOptions(permissions: PermissionView): void {
+  const options = permissionSelectOptions(permissions)
+  const selected = options.find((option) => option.id === permissions.currentValue)
+  elements.permissionToggleLabel.textContent = selected?.label ?? permissions.currentValue
   const fragment = document.createDocumentFragment()
   for (const item of options) {
-    const option = document.createElement('option')
-    option.value = item.id
-    option.textContent = item.label || item.name || item.id
-    option.title = item.description || ''
-    option.selected = item.id === selected
-    option.disabled = item.disabled === true
-    fragment.append(option)
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = `permission-option${item.id === permissions.currentValue ? ' active' : ''}`
+    button.setAttribute('role', 'option')
+    button.setAttribute('aria-selected', String(item.id === permissions.currentValue))
+    button.title = item.description || ''
+    const label = document.createElement('span')
+    label.className = 'permission-option-label'
+    label.textContent = item.label || item.id
+    button.append(label)
+    const check = document.createElement('span')
+    check.className = 'permission-option-check'
+    check.textContent = item.id === permissions.currentValue ? '✓' : ''
+    button.append(check)
+    if (item.disabled) {
+      button.disabled = true
+    } else {
+      button.addEventListener('click', () => {
+        post('setPermission', { value: item.id })
+        closePermissionPopup()
+      })
+    }
+    fragment.append(button)
   }
-  select.replaceChildren(fragment)
+  elements.permissionOptions.replaceChildren(fragment)
+}
+
+export function togglePermissionPopup(): void {
+  if (elements.permissionPopup.classList.contains('hidden')) openPermissionPopup()
+  else closePermissionPopup()
+}
+
+function openPermissionPopup(): void {
+  if (elements.permissionToggle.disabled) return
+  elements.permissionPopup.classList.remove('hidden')
+  elements.permissionToggle.classList.add('active')
+  elements.permissionToggle.setAttribute('aria-expanded', 'true')
+}
+
+export function closePermissionPopup(): void {
+  elements.permissionPopup.classList.add('hidden')
+  elements.permissionToggle.classList.remove('active')
+  elements.permissionToggle.setAttribute('aria-expanded', 'false')
 }
 
 export function toggleHistory(open: boolean): void {

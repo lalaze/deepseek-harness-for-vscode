@@ -972,8 +972,63 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .composer-actions { grid-area: actions; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
 .text-button { min-height: 27px; padding: 4px 6px; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 8px; font-size: 11px; }
 .text-button:hover, .text-button.active { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
-.permission-select { min-width: 116px; max-width: 138px; height: 27px; padding: 2px 20px 2px 8px; color: var(--vscode-descriptionForeground); background: transparent url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" fill="none" stroke="%23888888" stroke-width="1.2" stroke-linecap="round"/></svg>') no-repeat right 6px center; border: 0; border-radius: 8px; font-size: 11px; appearance: none; -webkit-appearance: none; }
-.permission-select:hover, .permission-select:focus { color: var(--vscode-foreground); background-color: var(--vscode-toolbar-hoverBackground); outline: none; }
+.permission-picker { position: relative; }
+.permission-toggle {
+  min-width: 116px;
+  max-width: 138px;
+  height: 27px;
+  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.permission-toggle:hover, .permission-toggle.active { color: var(--vscode-foreground); background-color: var(--vscode-toolbar-hoverBackground); }
+.permission-toggle:disabled { opacity: .55; cursor: default; }
+.permission-toggle-icon { color: var(--vscode-descriptionForeground); font-size: 11px; }
+.permission-toggle-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.permission-toggle-chevron { margin-left: auto; color: var(--vscode-descriptionForeground); font-size: 9px; }
+.permission-popup {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 24;
+  width: min(220px, calc(100vw - 16px));
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 34%, transparent);
+}
+.permission-popup-title { padding: 3px 6px 2px; color: var(--vscode-descriptionForeground); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.permission-options { display: grid; gap: 2px; }
+.permission-option {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  gap: 6px;
+  align-items: center;
+  color: var(--vscode-foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 11px;
+}
+.permission-option:hover { background: var(--vscode-list-hoverBackground); }
+.permission-option:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.permission-option.active { color: var(--vscode-list-activeSelectionForeground); background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 78%, transparent); border-color: color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent); }
+.permission-option-check { color: var(--vscode-list-activeSelectionForeground); text-align: right; }
+.permission-option:disabled { opacity: .5; cursor: default; }
 .composer-status { min-width: 0; flex: 1; overflow: hidden; color: var(--vscode-descriptionForeground); text-align: right; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 .context-meter {
   --context-color: var(--vscode-charts-blue, #4d8cff);
@@ -1087,7 +1142,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   .composer-tools { justify-content: flex-start; }
   .composer-meta { justify-content: flex-start; }
   .composer-status { text-align: left; }
-  .permission-select { width: min(138px, 40vw); }
+  .permission-toggle { width: min(138px, 40vw); }
   .configuration-toggle { max-width: 132px; }
 }
 
