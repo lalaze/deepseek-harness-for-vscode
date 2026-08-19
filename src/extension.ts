@@ -13,6 +13,7 @@ import { HarnessHostRuntime } from './runtime/web-runtime.js'
 import { CredentialStore } from './security/credential-store.js'
 import { ConnectionSettingsService } from './services/connection-settings-service.js'
 import { ConnectionTestService } from './services/connection-test-service.js'
+import { SessionImportService } from './import/session-import-service.js'
 import { WorkbenchViewProvider } from './ui/workbench-view-provider.js'
 
 let activeRuntime: HarnessHostRuntime | undefined
@@ -35,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
   const pluginCatalog = new DshPluginCatalogService()
   const pluginCenter = new DshPluginCenterController(pluginManager, pluginCatalog, gateway)
+  const sessionImport = new SessionImportService(pluginManager, gateway)
   const editorSelection = new EditorSelectionService()
   const workspaceFiles = new WorkspaceFileService()
   activeRuntime = runtime
@@ -85,6 +87,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand('workbench.action.openSettings', 'deepseekHarness')
       },
       showLogs: () => output.show(true),
+      importSession: () => sessionImport.runInteractive(),
     },
   )
 
@@ -116,6 +119,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await credentials.clearApiKey()
     }),
     vscode.commands.registerCommand('deepseekHarness.showLogs', () => output.show(true)),
+    vscode.commands.registerCommand('deepseekHarness.importSession', () => sessionImport.runInteractive()),
   )
 }
 

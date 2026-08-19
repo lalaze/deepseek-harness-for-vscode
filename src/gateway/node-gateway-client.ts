@@ -10,6 +10,12 @@ import type {
 import { hostFrameSchema, muxFrameSchema } from '@deepseek-ai/dsh-host-apiproxy/api/events.schema'
 import { serverRequestSchema, serverResponseSchema } from '@deepseek-ai/dsh-host-apiproxy/api/rpc.schema'
 import { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
+import type {
+  ImportDiscoverRequest,
+  ImportDiscoverResult,
+  ImportRequest,
+  ImportResult,
+} from '../import/types.js'
 
 type FrameParser<F> = { parse(value: unknown): F }
 type SocketItem<F> = { readonly kind: 'frame'; readonly envelope: RpcRequest<F> } | { readonly kind: 'end' }
@@ -65,6 +71,41 @@ export class NodeGatewayClient extends AbstractApiClient {
       throw new Error(`Export failed: HTTP ${response.status}${detail === '' ? '' : ` ${detail}`}`)
     }
     return new Uint8Array(await response.arrayBuffer())
+  }
+
+  /** Lists importable sessions through the dsh-chat-import panel API. */
+  async discoverImportSessions(request: ImportDiscoverRequest = {}): Promise<ImportDiscoverResult> {
+    return await this.postImportApi<ImportDiscoverResult>('/api-import/sessions', request)
+  }
+
+  /** Imports discovered sessions through the dsh-chat-import panel API. */
+  async importDiscoveredSessions(request: ImportRequest): Promise<ImportResult> {
+    return await this.postImportApi<ImportResult>('/api-import/import', request)
+  }
+
+  private async postImportApi<T extends { readonly ok: boolean; readonly error?: string }>(
+    path: string,
+    body: unknown,
+  ): Promise<T> {
+    const response = await globalThis.fetch(new URL(path, this.baseUrl), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (response.status === 404) {
+      throw new Error('SESSION_IMPORT_UNAVAILABLE')
+    }
+    const text = await response.text()
+    let parsed: T
+    try {
+      parsed = JSON.parse(text) as T
+    } catch {
+      throw new Error(`Import API ${path} returned HTTP ${response.status}${text === '' ? '' : `: ${text}`}`)
+    }
+    if (!response.ok || parsed.ok === false) {
+      throw new Error(parsed.error ?? `Import API ${path} failed: HTTP ${response.status}`)
+    }
+    return parsed
   }
 
   /**

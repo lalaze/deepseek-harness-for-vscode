@@ -20,6 +20,7 @@ export interface WorkbenchViewActions {
   readonly testConnection: (input: ConnectionSettingsInput) => Promise<ConnectionTestResult>
   readonly openSettings: () => Promise<void>
   readonly showLogs: () => void
+  readonly importSession: () => Promise<void>
 }
 
 /** Native Codex/Cline-style workbench. No Harness page or iframe is embedded. */
@@ -334,6 +335,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       case 'answerQuestions':
         await this.gateway.answerQuestions(requiredString(value, 'key'), questionAnswers(value.answers))
         break
+      case 'importSession':
+        await this.actions.importSession()
+        break
       case 'exportSession': {
         const sessionId = optionalString(value.sessionId)
         const exportId = sessionId === undefined ? (await this.gateway.snapshot()).active?.id : sessionId
@@ -437,7 +441,8 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       <button id="back-parent" class="icon-button compact hidden" title="${text('backToParentAgent')}" aria-label="${text('backToParentAgent')}">←</button>
       <button id="session-title" class="title-button" title="${text('renameConversation')}">${text('newConversation')}</button>
       <button id="fork" class="icon-button compact" title="${text('forkConversation')}" aria-label="${text('forkConversation')}">⑂</button>
-      <button id="export-session" class="icon-button compact" title="${text('exportSession')}" aria-label="${text('exportSession')}">⤓</button>
+      <button id="import-session" class="icon-button compact" title="${text('importSession')}" aria-label="${text('importSession')}">⤓</button>
+      <button id="export-session" class="icon-button compact" title="${text('exportSession')}" aria-label="${text('exportSession')}">↥</button>
     </div>
   </header>
 
@@ -447,7 +452,13 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
   </section>
 
   <aside id="history-panel" class="history-panel hidden" aria-label="${text('history')}">
-    <div class="panel-heading"><strong>${text('history')}</strong><button id="history-close" class="icon-button">×</button></div>
+    <div class="panel-heading">
+      <strong>${text('history')}</strong>
+      <div class="panel-heading-actions">
+        <button id="history-import" class="icon-button compact" title="${text('importSession')}" aria-label="${text('importSession')}">⤓</button>
+        <button id="history-close" class="icon-button">×</button>
+      </div>
+    </div>
     <input id="history-search" class="search-input" type="search" placeholder="${text('searchConversations')}">
     <div id="session-list" class="session-list"></div>
   </aside>

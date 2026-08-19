@@ -48,4 +48,21 @@ export const DEFAULT_BUILTIN_PLUGINS: readonly DefaultBuiltinPlugin[] = [
     updatedAt: '2026-08-13T00:00:00Z',
     compatibility: 'agent',
   },
+  {
+    id: 'https://github.com/Nwflower/dsh-chat-import',
+    name: 'DSH Chat Import',
+    owner: 'Nwflower',
+    description: {
+      en: 'Import Claude Code, Codex, Cursor, ChatGPT, and other agent transcripts as resumable DeepSeek Harness sessions. The native workbench also accepts official DSH session ZIP exports.',
+      zh: '将 Claude Code、Codex、Cursor、ChatGPT 等外部 Agent 会话导入为可续聊的 DeepSeek Harness 会话。原生工作台还支持导入官方 DSH 会话 ZIP。',
+    },
+    category: 'import',
+    categoryLabel: { en: 'Import', zh: '导入' },
+    repositoryUrl: 'https://github.com/Nwflower/dsh-chat-import',
+    installSpec: 'dsh-chat-import',
+    installedName: 'dsh-chat-import',
+    npmPackage: 'dsh-chat-import',
+    updatedAt: '2026-08-18T00:00:00Z',
+    compatibility: 'partial',
+  },
 ]

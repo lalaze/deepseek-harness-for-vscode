@@ -91,6 +91,8 @@ elements.fork.addEventListener('click', () => {
   clearPastedImages()
   post('fork')
 })
+elements.importSession.addEventListener('click', () => post('importSession'))
+elements.historyImport.addEventListener('click', () => post('importSession'))
 elements.exportSession.addEventListener('click', () => post('exportSession'))
 elements.compact.addEventListener('click', () => post('compact'))
 elements.setApiKey.addEventListener('click', () => post('setApiKey'))

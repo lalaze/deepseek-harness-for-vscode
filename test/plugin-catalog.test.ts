@@ -105,6 +105,7 @@ describe('DSH plugin catalog sources', () => {
     expect(contribution.categories).toEqual([
       { id: 'routing', label: '路由与工作流' },
       { id: 'vision', label: '视觉' },
+      { id: 'import', label: '导入' },
     ])
     expect(contribution.plugins[0]).toMatchObject({
       name: 'DSH Routing Suite',
@@ -118,6 +119,7 @@ describe('DSH plugin catalog sources', () => {
       'DSH Routing Suite',
       'DSH Vision Router',
       'DSH Super Injector',
+      'DSH Chat Import',
     ])
     expect(contribution.plugins[1]).toMatchObject({
       name: 'DSH Vision Router',
@@ -135,6 +137,13 @@ describe('DSH plugin catalog sources', () => {
       catalogSource: 'builtin',
       compatibility: 'agent',
     })
+    expect(contribution.plugins[3]).toMatchObject({
+      name: 'DSH Chat Import',
+      installSpec: 'dsh-chat-import',
+      installedName: 'dsh-chat-import',
+      catalogSource: 'builtin',
+      compatibility: 'partial',
+    })
   })
 
   it('prefers the managed recipe over an invalid same-repository GitHub package spec', async () => {
@@ -149,7 +158,7 @@ describe('DSH plugin catalog sources', () => {
     }, 'en')
     const builtin = await new BuiltinDshPluginSource().load('en')
 
-    const [plugin] = mergePluginCatalog([github, builtin]).plugins
+    const plugin = mergePluginCatalog([github, builtin]).plugins.find((item) => item.name === 'DSH Routing Suite')
     expect(plugin).toMatchObject({
       installSpec: 'builtin:dsh-routing-suite@0.3.3',
       installKind: 'managed-suite',
@@ -179,10 +188,11 @@ describe('DSH plugin catalog sources', () => {
     const service = new DshPluginCatalogService(workingSource, failingSource)
 
     const catalog = await service.load('en')
-    expect(catalog.plugins).toHaveLength(5)
+    expect(catalog.plugins).toHaveLength(6)
     expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Routing Suite')).toBe(true)
     expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Vision Router')).toBe(true)
     expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Super Injector')).toBe(true)
+    expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Chat Import')).toBe(true)
     expect(catalog.topicRepositoryCount).toBe(3016)
   })
 

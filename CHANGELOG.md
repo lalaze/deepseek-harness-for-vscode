@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- 新增会话导入：历史面板与标题栏可导入 DSH 官方会话 ZIP、ChatGPT 导出 ZIP、JSONL/文件夹，以及本机 Claude Code / Codex / Cursor 等 Agent 会话。
+- 首次启动会补装 `dsh-chat-import`（默认插件种子升至 v2）；导入后刷新会话列表并打开新导入的会话。
+
 ## 0.4.9
 
 - 工作台 WebView 脚本改为 TypeScript 模块打包（`src/webview/chat`），替代手写的 `media/chat.js` 整包。

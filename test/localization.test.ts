@@ -41,6 +41,7 @@ describe('extension localization', () => {
       'src/runtime/bundled-runtime.ts',
       'src/runtime/web-runtime.ts',
       'src/ui/workbench-view-provider.ts',
+      'src/import/session-import-service.ts',
     ]
     const hostMessages = sourceFiles.flatMap((path) => extractL10nMessages(readFileSync(`${root}/${path}`, 'utf8')))
     const catalogMessages = [

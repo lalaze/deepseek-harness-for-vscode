@@ -6,6 +6,7 @@
   "command.setApiKey": "DeepSeek Harness: Set API Key",
   "command.clearApiKey": "DeepSeek Harness: Clear API Key",
   "command.showLogs": "DeepSeek Harness: Show Logs",
+  "command.importSession": "DeepSeek Harness: Import Sessions",
   "view.chat": "Chat",
   "config.model": "Default model for new Harness sessions.",
   "config.model.flash": "DeepSeek V4 Flash for faster responses.",

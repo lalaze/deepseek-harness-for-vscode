@@ -104,6 +104,15 @@ export class HarnessGatewayService implements vscode.Disposable {
     })
   }
 
+  /** Starts the Gateway only when it is not already connected. */
+  async ensureStarted(): Promise<void> {
+    if (this.phase === 'connected' && this.client !== undefined) return
+    await this.start()
+    if (this.phase !== 'connected' || this.client === undefined) {
+      throw new Error(this.error ?? vscode.l10n.t('Harness Gateway is not connected.'))
+    }
+  }
+
   async start(): Promise<void> {
     this.phase = 'starting'
     this.error = undefined
@@ -599,6 +608,14 @@ export class HarnessGatewayService implements vscode.Disposable {
     }))
     await this.refreshSessionList()
     await this.selectSession(String(forked.sessionId))
+  }
+
+  /** Reloads the session list after an external import and optionally opens one. */
+  async reloadSessions(selectSessionId?: string): Promise<void> {
+    await this.refreshSessionList()
+    if (selectSessionId !== undefined && this.summaries.has(selectSessionId)) {
+      await this.selectSession(selectSessionId)
+    }
   }
 
   /** Downloads the current session's log ZIP (with descendants) for saving. */
