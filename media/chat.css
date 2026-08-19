@@ -744,6 +744,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   font-weight: 800;
   font-style: italic;
   letter-spacing: .1em;
+  text-transform: uppercase;
   animation: effort-flourish-pop 760ms cubic-bezier(.18, .89, .32, 1.1) forwards;
 }
 .effort-flourish::before {

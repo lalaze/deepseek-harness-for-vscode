@@ -173,16 +173,18 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     const before = this.store.snapshot()?.effortTone
     const snapshot = this.store.selectReasoning(index)
     this.render(snapshot)
-    if (snapshot !== undefined && snapshot.effortTone !== before) this.flourish(snapshot.effortTone)
+    if (snapshot !== undefined && snapshot.effortTone !== before) {
+      this.flourish(snapshot.effortTone, snapshot.effort.label)
+    }
     this.options.onChange()
   }
 
   /** Rhythm-game style judgement popup shown when the effort tier changes. */
-  private flourish(tone: EffortTone): void {
+  private flourish(tone: EffortTone, label: string): void {
     const burst = this.options.document.createElement('span')
     burst.className = `effort-flourish effort-flourish-${tone}`
     burst.setAttribute('aria-hidden', 'true')
-    burst.textContent = FLOURISH_LABEL[tone]
+    burst.textContent = label
     burst.addEventListener('animationend', () => burst.remove())
     this.effortControl.append(burst)
     // animationend does not fire when animations are disabled; sweep anyway.
@@ -336,13 +338,6 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     button.append(iconElement, copy, check)
     return button
   }
-}
-
-const FLOURISH_LABEL: Record<EffortTone, string> = {
-  off: 'MISS',
-  low: 'GOOD',
-  high: 'GREAT',
-  max: 'PERFECT',
 }
 
 function requiredElement<T extends HTMLElement>(document: Document, id: string): T {

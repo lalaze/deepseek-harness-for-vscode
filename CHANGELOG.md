@@ -5,7 +5,7 @@
 - 工作台 WebView 脚本改为 TypeScript 模块打包（`src/webview/chat`），替代手写的 `media/chat.js` 整包。
 - 配置面板：模型与 DSH 模式分组默认折叠并在标题处显示当前选择，/model、/preset 定向打开时自动展开。
 - 推理滑块拖动手感修复：拖动全程保持抓取光标，新增进度填充，旋钮在档位间平滑滑动。
-- 推理档位切换新增音游风格判定特效：off / low / high / max 分别弹出 MISS / GOOD / GREAT / PERFECT（金色渐变 + 扩散圆环），并遵循 prefers-reduced-motion。
+- 推理档位切换新增音游风格判定特效：切换时弹出当前档位名（如 LOW / HIGH / MAX），max 档位为金色渐变 + 扩散圆环，并遵循 prefers-reduced-motion。
 - 配置面板对比度提升：分组标题、Provider 头、图标与描述文字从说明灰提升为前景色混合，面板加高、模型行更紧凑，减少滚动。
 
 ## 0.4.8
