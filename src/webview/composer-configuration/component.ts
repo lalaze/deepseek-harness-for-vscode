@@ -260,10 +260,11 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.effortSlider.value = String(snapshot.effortIndex)
     this.effortSlider.disabled = snapshot.reasoning.length <= 1 || !snapshot.input.editable
     this.effortSlider.setAttribute('aria-valuetext', snapshot.effort.label)
-    const progress = snapshot.reasoning.length <= 1
+    const fraction = snapshot.reasoning.length <= 1
       ? 0
-      : snapshot.effortIndex / (snapshot.reasoning.length - 1) * 100
-    this.effortControl.style.setProperty('--effort-progress', `${progress}%`)
+      : snapshot.effortIndex / (snapshot.reasoning.length - 1)
+    this.effortControl.style.setProperty('--effort-progress', `${fraction * 100}%`)
+    this.effortControl.style.setProperty('--effort-position', String(fraction))
     const fragment = this.options.document.createDocumentFragment()
     snapshot.reasoning.forEach((effort, index) => {
       const button = this.options.document.createElement('button')

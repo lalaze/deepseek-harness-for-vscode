@@ -564,6 +564,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
               <div class="effort-slider-row">
                 <input id="effort-slider" type="range" min="0" max="2" step="1" value="1" aria-label="${text('configurationEffort')}">
                 <div id="effort-ticks" class="effort-ticks"></div>
+                <span class="effort-thumb" aria-hidden="true"></span>
               </div>
             </div>
             <p id="configuration-hint">${text('configurationAppliesNextMessage')}</p>
