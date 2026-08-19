@@ -608,7 +608,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   bottom: calc(100% + 8px);
   z-index: 24;
   width: min(340px, calc(100% - 12px));
-  max-height: min(62vh, 430px);
+  max-height: min(78vh, 560px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
@@ -627,20 +627,20 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .configuration-panel-scroll { min-height: 0; padding: 0 8px 8px; display: grid; gap: 7px; overflow-y: auto; overscroll-behavior: contain; }
 .configuration-group { display: grid; gap: 4px; }
 .configuration-group h3 { margin: 0; }
-.configuration-group-toggle { width: 100%; padding: 2px 5px; display: flex; align-items: center; gap: 5px; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; text-align: left; cursor: pointer; }
+.configuration-group-toggle { width: 100%; padding: 2px 5px; display: flex; align-items: center; gap: 5px; color: color-mix(in srgb, var(--vscode-foreground) 88%, transparent); background: transparent; border: 0; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; text-align: left; cursor: pointer; }
 .configuration-group-toggle:hover { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
 .configuration-group-chevron { flex: none; transition: transform 140ms ease; }
 .configuration-group:not(.collapsed) .configuration-group-chevron { transform: rotate(90deg); }
 .configuration-group.collapsed .configuration-options { display: none; }
-.configuration-group-current { min-width: 0; margin-left: auto; overflow: hidden; color: var(--vscode-descriptionForeground); font-weight: 400; text-transform: none; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-group-current { min-width: 0; margin-left: auto; overflow: hidden; color: color-mix(in srgb, var(--vscode-foreground) 68%, transparent); font-weight: 400; text-transform: none; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
 .configuration-group:not(.collapsed) .configuration-group-current { display: none; }
 .configuration-options { display: grid; gap: 2px; }
 .configuration-model-group .configuration-options { grid-template-columns: 1fr; gap: 4px; }
 .configuration-model-group-header {
   margin: 4px 2px 2px;
   padding: 4px 6px;
-  color: var(--vscode-descriptionForeground);
-  background: color-mix(in srgb, var(--vscode-editor-background) 72%, transparent);
+  color: color-mix(in srgb, var(--vscode-foreground) 82%, transparent);
+  background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent);
   border: 1px solid var(--vscode-widget-border);
   border-radius: 8px;
   font-size: 11px;
@@ -661,18 +661,18 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   border-radius: 10px;
   text-align: left;
 }
-.configuration-model-group .configuration-option { min-height: 44px; padding: 6px; grid-template-columns: 20px minmax(0, 1fr) 13px; gap: 4px; background: color-mix(in srgb, var(--vscode-editor-background) 62%, transparent); border-color: color-mix(in srgb, var(--vscode-widget-border) 62%, transparent); }
+.configuration-model-group .configuration-option { min-height: 38px; padding: 6px; grid-template-columns: 20px minmax(0, 1fr) 13px; gap: 4px; background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent); border-color: var(--vscode-widget-border); }
 .configuration-model-group .configuration-option-copy small { display: none; }
 .configuration-model-group .configuration-option-copy strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
 .configuration-option:hover { background: var(--vscode-list-hoverBackground); }
 .configuration-option:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .configuration-option.active { color: var(--vscode-list-activeSelectionForeground); background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 78%, transparent); border-color: color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent); }
-.configuration-option-icon { min-width: 25px; color: var(--vscode-descriptionForeground); text-align: center; font-family: var(--vscode-editor-font-family, monospace); font-size: 13px; }
+.configuration-option-icon { min-width: 25px; color: color-mix(in srgb, var(--vscode-foreground) 72%, transparent); text-align: center; font-family: var(--vscode-editor-font-family, monospace); font-size: 13px; }
 .configuration-model-group .configuration-option-icon { min-width: 20px; }
 .configuration-option.active .configuration-option-icon { color: inherit; }
 .configuration-option-copy { min-width: 0; display: grid; gap: 1px; }
 .configuration-option-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.configuration-option-copy small { color: var(--vscode-descriptionForeground); line-height: 1.28; font-size: 11px; }
+.configuration-option-copy small { color: color-mix(in srgb, var(--vscode-foreground) 68%, transparent); line-height: 1.28; font-size: 11px; }
 .configuration-option-copy small.configuration-option-provider { color: #9b7cff; font-weight: 600; }
 .configuration-option.active .configuration-option-copy small { color: inherit; opacity: .78; }
 .configuration-option-check { text-align: center; font-size: 13px; }
@@ -1096,7 +1096,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 }
 
 @media (max-width: 320px) {
-  .configuration-panel { max-height: min(72vh, 470px); }
+  .configuration-panel { max-height: min(84vh, 620px); }
   .configuration-model-group .configuration-options { grid-template-columns: minmax(0, 1fr); }
   .effort-main { display: grid; gap: 3px; }
   .effort-heading { min-width: 0; padding-top: 0; }
