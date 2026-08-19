@@ -6,6 +6,7 @@ import type {
   ComposerConfigurationSnapshot,
   ConfigurationOption,
   ConfigurationSection,
+  EffortTone,
   ModelConfigurationOption,
 } from './types.js'
 
@@ -146,14 +147,12 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
       this.options.onChange()
     })
     this.effortSlider.addEventListener('input', () => {
-      this.render(this.store.selectReasoning(Number(this.effortSlider.value)))
-      this.options.onChange()
+      this.changeReasoning(Number(this.effortSlider.value))
     })
     this.effortSlider.addEventListener('wheel', (event) => {
       event.preventDefault()
       const direction = event.deltaY > 0 ? 1 : -1
-      this.render(this.store.selectReasoning(Number(this.effortSlider.value) + direction))
-      this.options.onChange()
+      this.changeReasoning(Number(this.effortSlider.value) + direction)
     }, { passive: false })
     this.options.document.addEventListener('pointerdown', (event) => {
       const target = event.target
@@ -167,6 +166,27 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
         this.toggle.focus()
       }
     })
+  }
+
+  /** Applies a user-driven reasoning change and pops the tier flourish. */
+  private changeReasoning(index: number): void {
+    const before = this.store.snapshot()?.effortTone
+    const snapshot = this.store.selectReasoning(index)
+    this.render(snapshot)
+    if (snapshot !== undefined && snapshot.effortTone !== before) this.flourish(snapshot.effortTone)
+    this.options.onChange()
+  }
+
+  /** Rhythm-game style judgement popup shown when the effort tier changes. */
+  private flourish(tone: EffortTone): void {
+    const burst = this.options.document.createElement('span')
+    burst.className = `effort-flourish effort-flourish-${tone}`
+    burst.setAttribute('aria-hidden', 'true')
+    burst.textContent = FLOURISH_LABEL[tone]
+    burst.addEventListener('animationend', () => burst.remove())
+    this.effortControl.append(burst)
+    // animationend does not fire when animations are disabled; sweep anyway.
+    setTimeout(() => burst.remove(), 1200)
   }
 
   private render(snapshot: ComposerConfigurationSnapshot | undefined): void {
@@ -277,8 +297,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
       const position = snapshot.reasoning.length <= 1 ? 50 : index / (snapshot.reasoning.length - 1) * 100
       button.style.setProperty('--effort-stop', `${position}%`)
       button.addEventListener('click', () => {
-        this.render(this.store.selectReasoning(index))
-        this.options.onChange()
+        this.changeReasoning(index)
       })
       fragment.append(button)
     })
@@ -317,6 +336,13 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     button.append(iconElement, copy, check)
     return button
   }
+}
+
+const FLOURISH_LABEL: Record<EffortTone, string> = {
+  off: 'MISS',
+  low: 'GOOD',
+  high: 'GREAT',
+  max: 'PERFECT',
 }
 
 function requiredElement<T extends HTMLElement>(document: Document, id: string): T {

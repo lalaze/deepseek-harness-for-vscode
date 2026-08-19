@@ -687,6 +687,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   --effort-color: #9b7cff;
   --effort-progress: 50%;
   --effort-position: .5;
+  position: relative;
   padding: 9px 11px 8px;
   display: grid;
   gap: 4px;
@@ -730,6 +731,54 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .effort-tick[aria-current='true'] { color: var(--vscode-foreground); font-weight: 600; }
 .effort-tick[aria-current='true']::before { opacity: 0; }
 .effort-control p { margin: 0; color: var(--vscode-descriptionForeground); font-size: 10px; line-height: 1.35; }
+/* Rhythm-game judgement popup fired when the effort tier changes, styled
+   after the dsh-bgm hit effects: italic judgement word, glow, burst ring. */
+.effort-flourish {
+  position: absolute;
+  top: -15px;
+  right: 12px;
+  z-index: 6;
+  pointer-events: none;
+  font-size: 16px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: .1em;
+  animation: effort-flourish-pop 760ms cubic-bezier(.18, .89, .32, 1.1) forwards;
+}
+.effort-flourish::before {
+  content: '';
+  position: absolute;
+  inset: -7px -12px;
+  z-index: -1;
+  border: 2px solid var(--flourish-color);
+  border-radius: 50%;
+  opacity: 0;
+  animation: effort-flourish-ring 560ms ease-out;
+}
+.effort-flourish-off { --flourish-color: #8b8b93; color: var(--flourish-color); }
+.effort-flourish-low { --flourish-color: #3f9be0; color: #5db2f0; text-shadow: 0 0 10px color-mix(in srgb, var(--flourish-color) 60%, transparent); }
+.effort-flourish-high { --flourish-color: #9b7cff; color: #b89aff; text-shadow: 0 0 12px color-mix(in srgb, var(--flourish-color) 65%, transparent); }
+.effort-flourish-max {
+  --flourish-color: #ffb347;
+  background: linear-gradient(180deg, #ffe27a 8%, #ffb347 55%, #ff7a3c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--flourish-color) 70%, transparent));
+}
+@keyframes effort-flourish-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(1.65); }
+  22% { opacity: 1; transform: translateY(0) scale(1); }
+  68% { opacity: 1; transform: translateY(-5px) scale(1); }
+  100% { opacity: 0; transform: translateY(-12px) scale(.92); }
+}
+@keyframes effort-flourish-ring {
+  0% { opacity: .9; transform: scale(.35); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .effort-flourish, .effort-flourish::before { animation-duration: 1ms; }
+}
 .editor-context-list {
   max-height: 112px;
   padding: 9px 10px 0;
