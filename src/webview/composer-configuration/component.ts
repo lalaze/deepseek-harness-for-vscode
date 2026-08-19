@@ -6,6 +6,7 @@ import type {
   ComposerConfigurationSnapshot,
   ConfigurationOption,
   ConfigurationSection,
+  EffortTone,
   ModelConfigurationOption,
 } from './types.js'
 
@@ -42,6 +43,10 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   private readonly source: HTMLSelectElement
   private readonly models: HTMLElement
   private readonly presets: HTMLElement
+  private readonly modelsToggle: HTMLButtonElement
+  private readonly presetsToggle: HTMLButtonElement
+  private readonly modelsCurrent: HTMLElement
+  private readonly presetsCurrent: HTMLElement
   private readonly effortControl: HTMLElement
   private readonly effortValue: HTMLElement
   private readonly effortSlider: HTMLInputElement
@@ -58,6 +63,10 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.source = requiredElement(document, 'configuration-source')
     this.models = requiredElement(document, 'configuration-models')
     this.presets = requiredElement(document, 'configuration-presets')
+    this.modelsToggle = requiredElement(document, 'configuration-models-toggle')
+    this.presetsToggle = requiredElement(document, 'configuration-presets-toggle')
+    this.modelsCurrent = requiredElement(document, 'configuration-models-current')
+    this.presetsCurrent = requiredElement(document, 'configuration-presets-current')
     this.effortControl = requiredElement(document, 'effort-control')
     this.effortValue = requiredElement(document, 'effort-value')
     this.effortSlider = requiredElement(document, 'effort-slider')
@@ -94,6 +103,9 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.panel.classList.remove('hidden')
     this.toggle.classList.add('active')
     this.toggle.setAttribute('aria-expanded', 'true')
+    // A targeted open (e.g. /model, /preset) must reveal its collapsed group.
+    if (section === 'model') this.expandGroup(this.modelsToggle)
+    if (section === 'preset') this.expandGroup(this.presetsToggle)
     const target = section === 'reasoning'
       ? this.effortSlider
       : section === 'preset'
@@ -108,25 +120,39 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.toggle.setAttribute('aria-expanded', 'false')
   }
 
+  /** Folder-style collapse for the Models / DSH Modes groups. */
+  private toggleGroup(toggle: HTMLButtonElement): void {
+    const group = toggle.closest('.configuration-group')
+    if (group === null) return
+    const collapsed = group.classList.toggle('collapsed')
+    toggle.setAttribute('aria-expanded', String(!collapsed))
+  }
+
+  private expandGroup(toggle: HTMLButtonElement): void {
+    toggle.closest('.configuration-group')?.classList.remove('collapsed')
+    toggle.setAttribute('aria-expanded', 'true')
+  }
+
   private bindEvents(): void {
     this.toggle.addEventListener('click', () => {
       if (this.panel.classList.contains('hidden')) this.open()
       else this.close()
     })
     this.closeButton.addEventListener('click', () => this.close())
+    for (const toggle of [this.modelsToggle, this.presetsToggle]) {
+      toggle.addEventListener('click', () => this.toggleGroup(toggle))
+    }
     this.source.addEventListener('change', () => {
       this.render(this.store.selectSource(this.source.value))
       this.options.onChange()
     })
     this.effortSlider.addEventListener('input', () => {
-      this.render(this.store.selectReasoning(Number(this.effortSlider.value)))
-      this.options.onChange()
+      this.changeReasoning(Number(this.effortSlider.value))
     })
     this.effortSlider.addEventListener('wheel', (event) => {
       event.preventDefault()
       const direction = event.deltaY > 0 ? 1 : -1
-      this.render(this.store.selectReasoning(Number(this.effortSlider.value) + direction))
-      this.options.onChange()
+      this.changeReasoning(Number(this.effortSlider.value) + direction)
     }, { passive: false })
     this.options.document.addEventListener('pointerdown', (event) => {
       const target = event.target
@@ -140,6 +166,27 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
         this.toggle.focus()
       }
     })
+  }
+
+  /** Applies a user-driven reasoning change and pops the tier flourish. */
+  private changeReasoning(index: number): void {
+    const before = this.store.snapshot()?.effortTone
+    const snapshot = this.store.selectReasoning(index)
+    this.render(snapshot)
+    if (snapshot !== undefined && snapshot.effortTone !== before) this.flourish(snapshot.effortTone)
+    this.options.onChange()
+  }
+
+  /** Rhythm-game style judgement popup shown when the effort tier changes. */
+  private flourish(tone: EffortTone): void {
+    const burst = this.options.document.createElement('span')
+    burst.className = `effort-flourish effort-flourish-${tone}`
+    burst.setAttribute('aria-hidden', 'true')
+    burst.textContent = FLOURISH_LABEL[tone]
+    burst.addEventListener('animationend', () => burst.remove())
+    this.effortControl.append(burst)
+    // animationend does not fire when animations are disabled; sweep anyway.
+    setTimeout(() => burst.remove(), 1200)
   }
 
   private render(snapshot: ComposerConfigurationSnapshot | undefined): void {
@@ -183,6 +230,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   }
 
   private renderModels(snapshot: ComposerConfigurationSnapshot): void {
+    this.modelsCurrent.textContent = snapshot.model.label
     const fragment = this.options.document.createDocumentFragment()
     const groups = new Map<string, ModelConfigurationOption[]>()
     for (const model of snapshot.input.models) {
@@ -209,6 +257,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   }
 
   private renderPresets(snapshot: ComposerConfigurationSnapshot): void {
+    this.presetsCurrent.textContent = snapshot.preset.label
     const fragment = this.options.document.createDocumentFragment()
     for (const preset of snapshot.input.presets) {
       const active = preset.id === snapshot.selection.agentPreset
@@ -231,10 +280,11 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.effortSlider.value = String(snapshot.effortIndex)
     this.effortSlider.disabled = snapshot.reasoning.length <= 1 || !snapshot.input.editable
     this.effortSlider.setAttribute('aria-valuetext', snapshot.effort.label)
-    const progress = snapshot.reasoning.length <= 1
+    const fraction = snapshot.reasoning.length <= 1
       ? 0
-      : snapshot.effortIndex / (snapshot.reasoning.length - 1) * 100
-    this.effortControl.style.setProperty('--effort-progress', `${progress}%`)
+      : snapshot.effortIndex / (snapshot.reasoning.length - 1)
+    this.effortControl.style.setProperty('--effort-progress', `${fraction * 100}%`)
+    this.effortControl.style.setProperty('--effort-position', String(fraction))
     const fragment = this.options.document.createDocumentFragment()
     snapshot.reasoning.forEach((effort, index) => {
       const button = this.options.document.createElement('button')
@@ -247,8 +297,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
       const position = snapshot.reasoning.length <= 1 ? 50 : index / (snapshot.reasoning.length - 1) * 100
       button.style.setProperty('--effort-stop', `${position}%`)
       button.addEventListener('click', () => {
-        this.render(this.store.selectReasoning(index))
-        this.options.onChange()
+        this.changeReasoning(index)
       })
       fragment.append(button)
     })
@@ -287,6 +336,13 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     button.append(iconElement, copy, check)
     return button
   }
+}
+
+const FLOURISH_LABEL: Record<EffortTone, string> = {
+  off: 'MISS',
+  low: 'GOOD',
+  high: 'GREAT',
+  max: 'PERFECT',
 }
 
 function requiredElement<T extends HTMLElement>(document: Document, id: string): T {

@@ -609,7 +609,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   bottom: calc(100% + 8px);
   z-index: 24;
   width: min(340px, calc(100% - 12px));
-  max-height: min(62vh, 430px);
+  max-height: min(78vh, 560px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
@@ -627,14 +627,21 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 #configuration-source:disabled { opacity: .65; }
 .configuration-panel-scroll { min-height: 0; padding: 0 8px 8px; display: grid; gap: 7px; overflow-y: auto; overscroll-behavior: contain; }
 .configuration-group { display: grid; gap: 4px; }
-.configuration-group h3 { margin: 0; padding: 2px 5px; color: var(--vscode-descriptionForeground); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.configuration-group h3 { margin: 0; }
+.configuration-group-toggle { width: 100%; padding: 2px 5px; display: flex; align-items: center; gap: 5px; color: color-mix(in srgb, var(--vscode-foreground) 88%, transparent); background: transparent; border: 0; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; text-align: left; cursor: pointer; }
+.configuration-group-toggle:hover { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
+.configuration-group-chevron { flex: none; transition: transform 140ms ease; }
+.configuration-group:not(.collapsed) .configuration-group-chevron { transform: rotate(90deg); }
+.configuration-group.collapsed .configuration-options { display: none; }
+.configuration-group-current { min-width: 0; margin-left: auto; overflow: hidden; color: color-mix(in srgb, var(--vscode-foreground) 68%, transparent); font-weight: 400; text-transform: none; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-group:not(.collapsed) .configuration-group-current { display: none; }
 .configuration-options { display: grid; gap: 2px; }
 .configuration-model-group .configuration-options { grid-template-columns: 1fr; gap: 4px; }
 .configuration-model-group-header {
   margin: 4px 2px 2px;
   padding: 4px 6px;
-  color: var(--vscode-descriptionForeground);
-  background: color-mix(in srgb, var(--vscode-editor-background) 72%, transparent);
+  color: color-mix(in srgb, var(--vscode-foreground) 82%, transparent);
+  background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent);
   border: 1px solid var(--vscode-widget-border);
   border-radius: 8px;
   font-size: 11px;
@@ -655,24 +662,33 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   border-radius: 10px;
   text-align: left;
 }
-.configuration-model-group .configuration-option { min-height: 44px; padding: 6px; grid-template-columns: 20px minmax(0, 1fr) 13px; gap: 4px; background: color-mix(in srgb, var(--vscode-editor-background) 62%, transparent); border-color: color-mix(in srgb, var(--vscode-widget-border) 62%, transparent); }
+.configuration-model-group .configuration-option { min-height: 38px; padding: 6px; grid-template-columns: 20px minmax(0, 1fr) 13px; gap: 4px; background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent); border-color: var(--vscode-widget-border); }
 .configuration-model-group .configuration-option-copy small { display: none; }
 .configuration-model-group .configuration-option-copy strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
 .configuration-option:hover { background: var(--vscode-list-hoverBackground); }
 .configuration-option:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .configuration-option.active { color: var(--vscode-list-activeSelectionForeground); background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 78%, transparent); border-color: color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent); }
-.configuration-option-icon { min-width: 25px; color: var(--vscode-descriptionForeground); text-align: center; font-family: var(--vscode-editor-font-family, monospace); font-size: 13px; }
+.configuration-option-icon { min-width: 25px; color: color-mix(in srgb, var(--vscode-foreground) 72%, transparent); text-align: center; font-family: var(--vscode-editor-font-family, monospace); font-size: 13px; }
 .configuration-model-group .configuration-option-icon { min-width: 20px; }
 .configuration-option.active .configuration-option-icon { color: inherit; }
 .configuration-option-copy { min-width: 0; display: grid; gap: 1px; }
 .configuration-option-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.configuration-option-copy small { color: var(--vscode-descriptionForeground); line-height: 1.28; font-size: 11px; }
+.configuration-option-copy small { color: color-mix(in srgb, var(--vscode-foreground) 68%, transparent); line-height: 1.28; font-size: 11px; }
 .configuration-option-copy small.configuration-option-provider { color: #9b7cff; font-weight: 600; }
 .configuration-option.active .configuration-option-copy small { color: inherit; opacity: .78; }
 .configuration-option-check { text-align: center; font-size: 13px; }
+/* Registering --effort-progress lets Chromium interpolate the slider fill
+   between detents instead of jumping. */
+@property --effort-progress {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 0%;
+}
 .effort-control {
   --effort-color: #9b7cff;
   --effort-progress: 50%;
+  --effort-position: .5;
+  position: relative;
   padding: 9px 11px 8px;
   display: grid;
   gap: 4px;
@@ -692,21 +708,78 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .effort-heading strong::before { content: '('; }
 .effort-heading strong::after { content: ')'; }
 .effort-slider-row { width: min(160px, 54%); height: 50px; position: relative; flex: none; }
-#effort-slider { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 31px; margin: 0; padding: 0 7px; appearance: none; -webkit-appearance: none; background: color-mix(in srgb, var(--effort-color) 24%, var(--vscode-editorWidget-background)); border: 1px solid color-mix(in srgb, var(--effort-color) 34%, var(--vscode-widget-border)); border-radius: 999px; cursor: ew-resize; }
+#effort-slider { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 31px; margin: 0; padding: 0 7px; appearance: none; -webkit-appearance: none; background: linear-gradient(to right, color-mix(in srgb, var(--effort-color) 74%, var(--vscode-editorWidget-background)) 0 var(--effort-progress), color-mix(in srgb, var(--effort-color) 13%, var(--vscode-editorWidget-background)) var(--effort-progress) 100%); border: 1px solid color-mix(in srgb, var(--effort-color) 34%, var(--vscode-widget-border)); border-radius: 999px; cursor: grab; transition: --effort-progress 240ms cubic-bezier(.3, .9, .3, 1), background-color 160ms ease, border-color 160ms ease; }
+#effort-slider:active { cursor: grabbing; }
+#effort-slider:disabled { cursor: default; }
+/* The native thumb stays as an invisible hit target; the visible knob is the
+   .effort-thumb overlay so it can glide between detents via a CSS transition. */
 #effort-slider::-webkit-slider-runnable-track { height: 4px; background: transparent; border-radius: 999px; }
-#effort-slider::-webkit-slider-thumb { width: 23px; height: 23px; margin-top: -10px; appearance: none; -webkit-appearance: none; background: #fff; border: 3px solid color-mix(in srgb, var(--effort-color) 88%, #fff); border-radius: 50%; box-shadow: 0 1px 5px color-mix(in srgb, #000 42%, transparent); transition: border-color 160ms ease, transform 120ms ease; }
-#effort-slider::-webkit-slider-thumb:hover { transform: scale(1.08); }
+#effort-slider::-webkit-slider-thumb { width: 23px; height: 23px; margin-top: -10px; appearance: none; -webkit-appearance: none; opacity: 0; cursor: grab; }
+#effort-slider:active::-webkit-slider-thumb { cursor: grabbing; }
 #effort-slider::-moz-range-track { height: 4px; background: transparent; border-radius: 999px; }
 #effort-slider::-moz-range-progress { height: 4px; background: transparent; border-radius: 999px; }
-#effort-slider::-moz-range-thumb { width: 19px; height: 19px; background: #fff; border: 3px solid var(--effort-color); border-radius: 50%; box-shadow: 0 1px 5px color-mix(in srgb, #000 42%, transparent); }
+#effort-slider::-moz-range-thumb { width: 23px; height: 23px; opacity: 0; background: transparent; border: 0; cursor: grab; }
+.effort-thumb { position: absolute; top: 4px; left: calc(7px + (100% - 37px) * var(--effort-position)); z-index: 4; box-sizing: border-box; width: 23px; height: 23px; pointer-events: none; background: #fff; border: 3px solid color-mix(in srgb, var(--effort-color) 88%, #fff); border-radius: 50%; box-shadow: 0 1px 5px color-mix(in srgb, #000 42%, transparent); transition: left 240ms cubic-bezier(.3, .9, .3, 1), border-color 160ms ease, transform 120ms ease; }
+.effort-slider-row:hover .effort-thumb { transform: scale(1.08); }
+.effort-slider-row:active .effort-thumb { transform: scale(1.14); }
 .effort-ticks { position: absolute; top: 0; left: 11px; right: 11px; z-index: 3; height: 50px; pointer-events: none; }
 .effort-tick { position: absolute; left: var(--effort-stop); bottom: 0; min-width: 34px; height: 18px; padding: 0 3px; transform: translateX(-50%); pointer-events: auto; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 6px; font-size: 10px; line-height: 18px; }
 .effort-tick::before { content: ''; position: absolute; top: -19px; left: 50%; width: 6px; height: 6px; transform: translateX(-50%); background: color-mix(in srgb, var(--vscode-descriptionForeground) 48%, transparent); border-radius: 50%; }
 .effort-tick.active { color: var(--effort-color); }
-.effort-tick.active::before { background: var(--effort-color); }
+/* Passed dots ride on the filled portion of the track, so they flip to white
+   to stay visible against the effort colour. */
+.effort-tick.active::before { background: color-mix(in srgb, #fff 92%, transparent); }
 .effort-tick[aria-current='true'] { color: var(--vscode-foreground); font-weight: 600; }
 .effort-tick[aria-current='true']::before { opacity: 0; }
 .effort-control p { margin: 0; color: var(--vscode-descriptionForeground); font-size: 10px; line-height: 1.35; }
+/* Rhythm-game judgement popup fired when the effort tier changes, styled
+   after the dsh-bgm hit effects: italic judgement word, glow, burst ring. */
+.effort-flourish {
+  position: absolute;
+  top: -15px;
+  right: 12px;
+  z-index: 6;
+  pointer-events: none;
+  font-size: 16px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: .1em;
+  animation: effort-flourish-pop 760ms cubic-bezier(.18, .89, .32, 1.1) forwards;
+}
+.effort-flourish::before {
+  content: '';
+  position: absolute;
+  inset: -7px -12px;
+  z-index: -1;
+  border: 2px solid var(--flourish-color);
+  border-radius: 50%;
+  opacity: 0;
+  animation: effort-flourish-ring 560ms ease-out;
+}
+.effort-flourish-off { --flourish-color: #8b8b93; color: var(--flourish-color); }
+.effort-flourish-low { --flourish-color: #3f9be0; color: #5db2f0; text-shadow: 0 0 10px color-mix(in srgb, var(--flourish-color) 60%, transparent); }
+.effort-flourish-high { --flourish-color: #9b7cff; color: #b89aff; text-shadow: 0 0 12px color-mix(in srgb, var(--flourish-color) 65%, transparent); }
+.effort-flourish-max {
+  --flourish-color: #ffb347;
+  background: linear-gradient(180deg, #ffe27a 8%, #ffb347 55%, #ff7a3c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--flourish-color) 70%, transparent));
+}
+@keyframes effort-flourish-pop {
+  0% { opacity: 0; transform: translateY(8px) scale(1.65); }
+  22% { opacity: 1; transform: translateY(0) scale(1); }
+  68% { opacity: 1; transform: translateY(-5px) scale(1); }
+  100% { opacity: 0; transform: translateY(-12px) scale(.92); }
+}
+@keyframes effort-flourish-ring {
+  0% { opacity: .9; transform: scale(.35); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .effort-flourish, .effort-flourish::before { animation-duration: 1ms; }
+}
 .editor-context-list {
   max-height: 112px;
   padding: 9px 10px 0;
@@ -1024,7 +1097,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 }
 
 @media (max-width: 320px) {
-  .configuration-panel { max-height: min(72vh, 470px); }
+  .configuration-panel { max-height: min(84vh, 620px); }
   .configuration-model-group .configuration-options { grid-template-columns: minmax(0, 1fr); }
   .effort-main { display: grid; gap: 3px; }
   .effort-heading { min-width: 0; padding-top: 0; }
