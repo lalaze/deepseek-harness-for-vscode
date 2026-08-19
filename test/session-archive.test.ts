@@ -44,16 +44,47 @@ describe('session archive ZIP', () => {
     expect(new TextDecoder().decode(entry?.data)).toBe('[{"title":"hello"}]')
   })
 
+  it('extracts stored ZIP entries without deflate', () => {
+    const zip = buildZip([{ name: 'session.jsonl', data: '{"type":"session"}\n', method: 0 }])
+    const [entry] = extractSessionArchive(zip)
+    expect(entry?.name).toBe('session.jsonl')
+    expect(new TextDecoder().decode(entry?.data)).toBe('{"type":"session"}\n')
+  })
+
   it('rejects unknown zip layouts and unsafe paths', () => {
     expect(classifyArchive(['readme.txt'])).toBe('unknown')
     const zip = buildZip([{ name: '../escape.jsonl', data: 'nope' }])
     expect(() => extractSessionArchive(zip)).toThrow(/Unsafe ZIP entry path/)
+  })
+
+  it('rejects forged stored-entry size metadata', () => {
+    const zip = buildZip([{
+      name: 'session.jsonl',
+      data: '{"type":"session"}\n',
+      method: 0,
+      claimedUncompressedSize: 4,
+    }])
+    expect(() => extractSessionArchive(zip)).toThrow(/forged size metadata/)
+  })
+
+  it('bounds inflated output and cumulative extracted size', () => {
+    const inflated = 'A'.repeat(64)
+    const zip = buildZip([{ name: 'session.jsonl', data: inflated }])
+    expect(() => extractSessionArchive(zip, undefined, { maxEntryBytes: 16 })).toThrow()
+
+    const bulk = buildZip([
+      { name: 'session.jsonl', data: 'abcdefghij', method: 0 },
+      { name: 'subagents/child/session.jsonl', data: 'klmnopqrst', method: 0 },
+    ])
+    expect(() => extractSessionArchive(bulk, undefined, { maxTotalBytes: 12 })).toThrow(/extracted size is too large/)
   })
 })
 
 interface ZipSource {
   readonly name: string
   readonly data: string | Uint8Array
+  readonly method?: 0 | 8
+  readonly claimedUncompressedSize?: number
 }
 
 function buildZip(files: readonly ZipSource[]): Uint8Array {
@@ -61,30 +92,29 @@ function buildZip(files: readonly ZipSource[]): Uint8Array {
   const central: Uint8Array[] = []
   let offset = 0
   for (const file of files) {
+    const method = file.method ?? 8
     const name = new TextEncoder().encode(file.name)
     const payload = typeof file.data === 'string' ? new TextEncoder().encode(file.data) : file.data
-    const compressed = deflateRawSync(payload)
-    const local = new Uint8Array(30 + name.byteLength + compressed.byteLength)
+    const body = method === 0 ? payload : deflateRawSync(payload)
+    const uncompressedSize = file.claimedUncompressedSize ?? payload.byteLength
+    const local = new Uint8Array(30 + name.byteLength + body.byteLength)
     writeUint32(local, 0, 0x04034b50)
-    writeUint16(local, 8, 8)
-    writeUint32(local, 18, compressed.byteLength)
-    writeUint32(local, 22, payload.byteLength)
+    writeUint16(local, 8, method)
+    writeUint32(local, 18, body.byteLength)
+    writeUint32(local, 22, uncompressedSize)
     writeUint16(local, 26, name.byteLength)
     local.set(name, 30)
-    local.set(compressed, 30 + name.byteLength)
+    local.set(body, 30 + name.byteLength)
     chunks.push(local)
 
     const record = new Uint8Array(46 + name.byteLength)
     writeUint32(record, 0, 0x02014b50)
-    writeUint16(record, 10, 8)
-    writeUint32(record, 20, compressed.byteLength)
-    writeUint32(record, 24, payload.byteLength)
+    writeUint16(record, 10, method)
+    writeUint32(record, 20, body.byteLength)
+    writeUint32(record, 24, uncompressedSize)
     writeUint16(record, 28, name.byteLength)
     writeUint32(record, 42, offset)
     record.set(name, 46)
-    if (file.name.includes('..')) {
-      // Keep the writer honest: the reader must reject this name.
-    }
     central.push(record)
     offset += local.byteLength
   }

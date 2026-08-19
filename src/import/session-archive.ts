@@ -3,8 +3,14 @@ import { inflateRawSync } from 'node:zlib'
 const LOCAL_HEADER = 0x04034b50
 const CENTRAL_HEADER = 0x02014b50
 const EOCD_HEADER = 0x06054b50
-const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
-const MAX_ENTRY_BYTES = 128 * 1024 * 1024
+export const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
+export const MAX_ENTRY_BYTES = 128 * 1024 * 1024
+
+export interface ExtractArchiveLimits {
+  readonly maxArchiveBytes?: number
+  readonly maxEntryBytes?: number
+  readonly maxTotalBytes?: number
+}
 
 export type SessionArchiveKind = 'dsh-export' | 'chatgpt-export' | 'unknown'
 
@@ -28,11 +34,16 @@ export function inspectSessionArchive(bytes: Uint8Array): InspectedSessionArchiv
 export function extractSessionArchive(
   bytes: Uint8Array,
   keep?: (name: string) => boolean,
+  limits: ExtractArchiveLimits = {},
 ): readonly SessionArchiveEntry[] {
-  if (bytes.byteLength > MAX_ARCHIVE_BYTES) {
+  const maxArchiveBytes = limits.maxArchiveBytes ?? MAX_ARCHIVE_BYTES
+  if (bytes.byteLength > maxArchiveBytes) {
     throw new Error(`Archive is too large (${bytes.byteLength} bytes).`)
   }
-  return readZipEntries(bytes, keep)
+  return readZipEntries(bytes, keep, {
+    maxEntryBytes: limits.maxEntryBytes ?? MAX_ENTRY_BYTES,
+    maxTotalBytes: limits.maxTotalBytes ?? maxArchiveBytes,
+  })
 }
 
 export function classifyArchive(names: readonly string[]): SessionArchiveKind {
@@ -60,15 +71,26 @@ function listZipNames(bytes: Uint8Array): readonly string[] {
   return readCentralDirectory(bytes).map((entry) => entry.name)
 }
 
-function readZipEntries(bytes: Uint8Array, keep?: (name: string) => boolean): readonly SessionArchiveEntry[] {
+function readZipEntries(
+  bytes: Uint8Array,
+  keep: ((name: string) => boolean) | undefined,
+  limits: { readonly maxEntryBytes: number; readonly maxTotalBytes: number },
+): readonly SessionArchiveEntry[] {
   const catalog = readCentralDirectory(bytes)
-  return catalog.flatMap((entry) => {
-    if (entry.name.endsWith('/')) return []
+  const extracted: SessionArchiveEntry[] = []
+  let total = 0
+  for (const entry of catalog) {
+    if (entry.name.endsWith('/')) continue
     const name = normalizeZipPath(entry.name)
-    if (keep !== undefined && !keep(name)) return []
-    const data = readLocalFile(bytes, entry)
-    return [{ name, data }]
-  })
+    if (keep !== undefined && !keep(name)) continue
+    const data = readLocalFile(bytes, entry, limits.maxEntryBytes)
+    total += data.byteLength
+    if (total > limits.maxTotalBytes) {
+      throw new Error('Archive extracted size is too large.')
+    }
+    extracted.push({ name, data })
+  }
+  return extracted
 }
 
 interface CentralEntry {
@@ -105,19 +127,36 @@ function readCentralDirectory(bytes: Uint8Array): readonly CentralEntry[] {
   return entries
 }
 
-function readLocalFile(bytes: Uint8Array, entry: CentralEntry): Uint8Array {
+function readLocalFile(bytes: Uint8Array, entry: CentralEntry, maxEntryBytes: number): Uint8Array {
   if (readUint32(bytes, entry.localHeaderOffset) !== LOCAL_HEADER) {
     throw new Error(`Invalid ZIP local header for ${entry.name}.`)
   }
   const nameLength = readUint16(bytes, entry.localHeaderOffset + 26)
   const extraLength = readUint16(bytes, entry.localHeaderOffset + 28)
   const dataOffset = entry.localHeaderOffset + 30 + nameLength + extraLength
-  const compressed = bytes.subarray(dataOffset, dataOffset + entry.compressedSize)
-  if (entry.uncompressedSize > MAX_ENTRY_BYTES) {
-    throw new Error(`ZIP entry is too large: ${entry.name}`)
+  if (dataOffset + entry.compressedSize > bytes.byteLength) {
+    throw new Error(`ZIP entry is truncated: ${entry.name}`)
   }
-  if (entry.method === 0) return compressed
-  if (entry.method === 8) return inflateRawSync(compressed)
+  const compressed = bytes.subarray(dataOffset, dataOffset + entry.compressedSize)
+  if (compressed.byteLength !== entry.compressedSize) {
+    throw new Error(`ZIP entry is truncated: ${entry.name}`)
+  }
+  if (entry.method === 0) {
+    if (compressed.byteLength > maxEntryBytes) {
+      throw new Error(`ZIP entry is too large: ${entry.name}`)
+    }
+    if (entry.uncompressedSize !== compressed.byteLength) {
+      throw new Error(`ZIP entry has forged size metadata: ${entry.name}`)
+    }
+    return compressed
+  }
+  if (entry.method === 8) {
+    const data = inflateRawSync(compressed, { maxOutputLength: maxEntryBytes })
+    if (data.byteLength > maxEntryBytes) {
+      throw new Error(`ZIP entry is too large: ${entry.name}`)
+    }
+    return new Uint8Array(data)
+  }
   throw new Error(`Unsupported ZIP compression method ${entry.method} in ${entry.name}.`)
 }
 

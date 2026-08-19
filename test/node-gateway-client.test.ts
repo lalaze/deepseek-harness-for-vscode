@@ -92,4 +92,15 @@ describe('NodeGatewayClient Remote carrier', () => {
     const client = new NodeGatewayClient(`http://127.0.0.1:${address.port}`)
     await expect(client.discoverImportSessions()).rejects.toThrow('SESSION_IMPORT_UNAVAILABLE')
   })
+
+  it('aborts an import API request that never finishes', async () => {
+    const server = createServer(() => {
+      // Keep the POST response open until the client times out.
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address() as AddressInfo
+    const client = new NodeGatewayClient(`http://127.0.0.1:${address.port}`, 50)
+    await expect(client.discoverImportSessions()).rejects.toThrow(/timed out after 50ms/)
+  })
 })

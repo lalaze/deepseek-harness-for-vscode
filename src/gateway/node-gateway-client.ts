@@ -39,7 +39,10 @@ export interface HostCommandExecution {
  * not a browser and does not expose the Harness browser module loader.
  */
 export class NodeGatewayClient extends AbstractApiClient {
-  constructor(private readonly baseUrl: string) {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly importTimeoutMs = 30_000,
+  ) {
     super(30_000)
   }
 
@@ -87,10 +90,16 @@ export class NodeGatewayClient extends AbstractApiClient {
     path: string,
     body: unknown,
   ): Promise<T> {
-    const response = await globalThis.fetch(new URL(path, this.baseUrl), {
+    const response = await this.doFetch(new URL(path, this.baseUrl), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.importTimeoutMs),
+    }).catch((cause: unknown) => {
+      if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {
+        throw new Error(`Import API ${path} timed out after ${String(this.importTimeoutMs)}ms`)
+      }
+      throw cause
     })
     if (response.status === 404) {
       throw new Error('SESSION_IMPORT_UNAVAILABLE')

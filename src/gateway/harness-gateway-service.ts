@@ -82,6 +82,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private projections: Record<string, unknown> = {}
   private readonly labels = localizedWorkbenchLabels()
   private commands: readonly CommandEntry[] = projectionCommands(undefined, this.labels)
+  private startTask: Promise<void> | undefined
   private phase: HarnessWorkbenchState['phase'] = 'idle'
   private error: string | undefined
   private publishScheduled = false
@@ -114,6 +115,21 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
+    if (this.startTask !== undefined) {
+      await this.startTask
+      return
+    }
+    if (this.phase === 'connected' && this.client !== undefined) return
+    const task = this.runStart()
+    this.startTask = task
+    try {
+      await task
+    } finally {
+      if (this.startTask === task) this.startTask = undefined
+    }
+  }
+
+  private async runStart(): Promise<void> {
     this.phase = 'starting'
     this.error = undefined
     this.fireChange()
