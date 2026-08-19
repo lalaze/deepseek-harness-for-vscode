@@ -1,0 +1,361 @@
+import type { ActiveSessionView, ChatItem } from '../../domain/workbench-state.js'
+import { renderMarkdown } from '../markdown.js'
+import {
+  components,
+  elements,
+  messageSignatures,
+  node,
+  optimisticBubbles,
+  renderedSessionId,
+  setOptimisticBubbles,
+  setRenderedSessionId,
+  setStickToBottomOnLoad,
+  stickToBottomOnLoad,
+  t,
+} from './context.js'
+import { markdownActions } from './markdown-actions.js'
+import type { OptimisticBubble } from './types.js'
+import {
+  captureDisclosures,
+  copyText,
+  estimateReasoningTokens,
+  formatTokenCount,
+  isNearBottom,
+  messageSignature,
+  patchStreamingMessage,
+  restoreDisclosures,
+  scrollConversationToBottom,
+  setMessageMetadata,
+} from './utils.js'
+
+export function renderMessages(active: ActiveSessionView | undefined): void {
+  const realMessages = active?.messages || []
+  const sessionId = active?.id || ''
+  const sessionChanged = sessionId !== renderedSessionId
+  if (sessionChanged) setStickToBottomOnLoad(true)
+  if (sessionChanged && optimisticBubbles.length > 0) setOptimisticBubbles([])
+  reconcileOptimistic(realMessages)
+  const messages = [...realMessages, ...optimisticBubbles]
+  // Keep forcing the view to the bottom while a newly opened session is still
+  // loading: selectSession first pushes an empty state (which would otherwise
+  // scroll to the top), then the transcript arrives in a later state push.
+  const shouldStick = stickToBottomOnLoad || sessionChanged || isNearBottom(elements.conversation)
+  const previousTop = elements.conversation.scrollTop
+  const previousHeight = elements.conversation.scrollHeight
+  const previousFirstId = (elements.messages.firstElementChild as HTMLElement | null)?.dataset.messageId
+  const conclusionId = latestConclusionId(messages)
+  const running = active?.running ?? false
+  const existing = new Map(Array.from(elements.messages.children).map((child) => [(child as HTMLElement).dataset.messageId ?? '', child as HTMLElement]))
+  const retained = new Set<string>()
+  let cursor = elements.messages.firstElementChild
+
+  for (const item of messages) {
+    const id = String(item.id)
+    const signature = messageSignature(item)
+    let element = existing.get(id)
+    if (!element) {
+      element = renderMessage(item, conclusionId, running)
+      setMessageMetadata(element, id, signature)
+    } else if (messageSignatures.get(element) !== signature) {
+      if (patchStreamingMessage(element, item)) {
+        messageSignatures.set(element, signature)
+      } else {
+        const wasCursor = element === cursor
+        const disclosureState = captureDisclosures(element)
+        const replacement = renderMessage(item, conclusionId, running)
+        restoreDisclosures(replacement, disclosureState)
+        setMessageMetadata(replacement, id, signature)
+        element.replaceWith(replacement)
+        element = replacement
+        if (wasCursor) cursor = replacement
+      }
+    }
+    retained.add(id)
+    if (element !== cursor) elements.messages.insertBefore(element, cursor)
+    cursor = element.nextElementSibling
+  }
+
+  for (const [id, element] of existing) {
+    if (!retained.has(id)) element.remove()
+  }
+  // The copy button only survives on the finished conclusion; remove any that
+  // are stale (streaming moved on, turn restarted, or a new conclusion
+  // replaced the old one).
+  for (const footer of Array.from(elements.messages.querySelectorAll<HTMLElement>('.message-copy-footer'))) {
+    const article = footer.closest('article')
+    if (running || article?.dataset.messageId !== conclusionId) footer.remove()
+  }
+  // Keep worked-time footers only under DeepSeek bubbles; remove any that
+  // leaked onto user bubbles.
+  for (const footer of Array.from(elements.messages.querySelectorAll<HTMLElement>('article.message:not(.assistant) .work-duration'))) {
+    footer.remove()
+  }
+  elements.empty.classList.toggle('hidden', messages.length > 0)
+  const prepended = !sessionChanged && previousFirstId !== undefined
+    && messages.findIndex((item) => String(item.id) === previousFirstId) > 0
+  if (shouldStick) {
+    scrollConversationToBottom()
+  } else if (prepended) {
+    elements.conversation.scrollTop = previousTop + elements.conversation.scrollHeight - previousHeight
+  } else {
+    // Streaming below the viewport must not steal the reader's position.
+    elements.conversation.scrollTop = previousTop
+  }
+  // Once the transcript for a freshly opened session is on screen, stop
+  // forcing the bottom; later prepends/streams use normal stickiness.
+  if (messages.length > 0) setStickToBottomOnLoad(false)
+  setRenderedSessionId(sessionId)
+}
+
+export function messageText(item: ChatItem): string {
+  return (item.blocks || [])
+    .filter((block) => block.kind === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim()
+}
+
+function messageImageCount(item: ChatItem): number {
+  return (item.blocks || []).filter((block) => block.kind === 'image').length
+}
+
+/** Drops optimistic bubbles whose real user/message has now surfaced (FIFO by content). */
+function reconcileOptimistic(realMessages: readonly ChatItem[]): void {
+  if (optimisticBubbles.length === 0) return
+  const matched = new Set<string>()
+  const pending: OptimisticBubble[] = []
+  for (const bubble of optimisticBubbles) {
+    const index = realMessages.findIndex((message) =>
+      !matched.has(message.id)
+      && message.kind === 'message'
+      && message.role === 'user'
+      && messageText(message) === bubble.text
+      && messageImageCount(message) === bubble.imageCount
+    )
+    const found = index === -1 ? undefined : realMessages[index]
+    if (found === undefined) pending.push(bubble)
+    else matched.add(found.id)
+  }
+  setOptimisticBubbles(pending)
+}
+
+function latestConclusionId(messages: readonly ChatItem[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index]
+    if (item?.kind === 'message' && item.role === 'assistant' && messageText(item) !== '') return item.id
+  }
+  return undefined
+}
+
+function createCopyFooter(item: ChatItem): HTMLButtonElement {
+  const button = node('button', 'message-copy-footer') as HTMLButtonElement
+  button.type = 'button'
+  button.title = t('copyConclusion')
+  button.setAttribute('aria-label', t('copyConclusion'))
+  const icon = node('span', 'copy-icon', '⧉')
+  const label = node('span', 'copy-label', t('copy'))
+  button.append(icon, label)
+  button.addEventListener('click', () => {
+    copyText(messageText(item))
+    button.classList.add('copied')
+    icon.textContent = '✓'
+    label.textContent = t('copied')
+    setTimeout(() => {
+      button.classList.remove('copied')
+      icon.textContent = '⧉'
+      label.textContent = t('copy')
+    }, 2_000)
+  })
+  return button
+}
+
+function renderMessage(item: ChatItem, conclusionId: string | undefined, running: boolean): HTMLElement {
+  if (item.kind === 'tool') return renderTool(item)
+  if (item.kind === 'context') return renderContext(item)
+  if (item.kind === 'notice') {
+    const notice = node('div', `notice ${item.status || ''}`)
+    notice.append(node('strong', '', item.title || t('status')))
+    if (item.detail) notice.append(node('span', '', item.detail))
+    components.workDuration.update(notice, item.status === 'running' ? undefined : item.workDuration, item.status === 'running')
+    return notice
+  }
+  const article = node('article', `message ${item.role || ''}`)
+  const label = node('div', 'message-label', item.role === 'user' ? t('you') : 'DeepSeek')
+  article.append(label)
+  const body = node('div', 'message-body')
+  components.streamingMessage.render(body, item)
+  article.append(body)
+  // Every DeepSeek bubble carries its worked-time footer (it ticks while the
+  // turn runs and freezes when done). The copy button belongs only to the
+  // finished turn's final conclusion.
+  if (item.role === 'assistant') components.workDuration.update(article, item.workDuration)
+  if (!running && item.role === 'assistant' && item.id === conclusionId) article.append(createCopyFooter(item))
+  return article
+}
+
+function renderTool(item: ChatItem): HTMLElement {
+  const container = node('div', 'tool-item')
+  const details = node('details', `tool-card ${item.status || ''}`) as HTMLDetailsElement
+  details.dataset.disclosureKey = 'tool'
+  const summary = node('summary')
+  // One merged row per tool: a per-tool glyph on the call card; standalone
+  // result cards (call missing from this history page) keep a status mark.
+  const isResultOnly = String(item.id || '').endsWith('-result')
+  const icon = isResultOnly
+    ? (item.status === 'error' ? '✕' : '✓')
+    : toolIcon(item.title)
+  summary.append(node('span', 'tool-status', icon), node('span', 'tool-title', toolDisplayName(item.title || t('tool'))))
+  if (item.detail && item.detail.trim() !== '') {
+    summary.append(node('span', 'tool-preview', toolPreviewText(item.detail)))
+  }
+  details.append(summary)
+  if (item.detail && item.detail.trim() !== '') {
+    details.append(toolSectionLabel(t('toolArguments'), estimateReasoningTokens(item.detail)))
+    const detail = node('div', 'tool-detail')
+    renderToolDetail(detail, item.detail)
+    details.append(detail)
+  }
+  if (item.result && item.result.trim() !== '') {
+    details.append(toolSectionLabel(t('toolResult'), estimateReasoningTokens(item.result)))
+    const result = node('div', 'tool-detail')
+    renderToolDetail(result, item.result)
+    details.append(result)
+  }
+  container.append(details)
+  // A turn's cumulative worked-time footer lands on the last visible item,
+  // which is often a tool card; show it below the card so it never sits above
+  // the tool call.
+  if (item.workDuration !== undefined) components.workDuration.update(container, item.workDuration)
+  return container
+}
+
+/** Section heading for a tool card, with a muted estimated token count. */
+function toolSectionLabel(label: string, tokens: number | undefined): HTMLElement {
+  const el = node('div', 'tool-section-label')
+  el.append(document.createTextNode(label))
+  if (tokens !== undefined) {
+    el.append(node('span', 'tool-tokens', t('toolTokens', { tokens: formatTokenCount(tokens) })))
+  }
+  return el
+}
+
+function toolDisplayName(name: string | undefined): string {
+  if (name === '') return name ?? ''
+  return (name ?? '').charAt(0).toUpperCase() + (name ?? '').slice(1)
+}
+
+const TOOL_ICONS = new Map<string, string>([
+  // Shell / command execution.
+  ['bash', '❯'], ['shell', '❯'], ['terminal', '❯'], ['sh', '❯'], ['zsh', '❯'],
+  ['powershell', '❯'], ['exec', '❯'], ['exec_command', '❯'], ['run_command', '❯'],
+  ['run', '❯'], ['command', '❯'],
+  // File editing.
+  ['edit', '✎'], ['str_replace_editor', '✎'], ['str_replace', '✎'], ['apply_patch', '✎'],
+  ['edit_file', '✎'], ['replace', '✎'], ['rewrite', '✎'], ['write', '✎'], ['create', '✎'],
+  ['create_file', '✎'], ['append', '✎'], ['append_file', '✎'],
+  // File reading / browsing.
+  ['read', '≡'], ['read_file', '≡'], ['view', '≡'], ['view_file', '≡'], ['cat', '≡'],
+  ['ls', '≡'], ['list', '≡'], ['inspect', '≡'], ['stat', '≡'],
+  // Search.
+  ['glob', '⌕'], ['grep', '⌕'], ['search', '⌕'], ['find', '⌕'], ['rg', '⌕'],
+  ['ripgrep', '⌕'], ['find_files', '⌕'], ['search_files', '⌕'],
+  // Web / network.
+  ['web_search', '≋'], ['web', '≋'], ['web_fetch', '≋'], ['fetch', '≋'], ['http', '≋'],
+  ['url', '≋'], ['browser', '≋'], ['request', '≋'],
+  // Workflow orchestration.
+  ['workflow', '⇄'], ['pipeline', '⇄'], ['orchestrator', '⇄'], ['parallel', '⇄'],
+  // Sub-agents.
+  ['subagent', '◎'], ['subagent_fork', '◎'], ['agent', '◎'], ['spawn', '◎'], ['ralph', '◎'],
+  // Goals.
+  ['create_goal', '⚑'], ['update_goal', '⚑'], ['get_goal', '⚑'], ['goal', '⚑'],
+  // Questions / confirmations.
+  ['ask_user_question', '?'], ['ask', '?'], ['ask_user', '?'], ['confirm', '?'], ['prompt', '?'],
+  // Task lists.
+  ['todo_write', '☑'], ['todo', '☑'], ['task', '☑'],
+  // Interrupt / cancel.
+  ['interrupt_agent', '✕'], ['cancel', '✕'], ['kill', '✕'], ['stop', '✕'], ['job_kill', '✕'],
+  // Job control.
+  ['job_list', '▤'], ['job_output', '▤'], ['job', '▤'],
+  // Vision / images.
+  ['read_image', '▣'], ['vision_describe', '▣'], ['vision_ocr', '▣'], ['screenshot', '▣'],
+  ['image', '▣'], ['ocr', '▣'],
+  // Skills.
+  ['skill', '✦'], ['skills', '✦'],
+])
+
+/** Best-effort glyph per tool name; dev_* helpers and unknown tools get a gear. */
+function toolIcon(name: string | undefined): string {
+  const normalized = String(name || '').trim().toLowerCase()
+  if (normalized.startsWith('dev_')) return '⚙'
+  return TOOL_ICONS.get(normalized) ?? '⚙'
+}
+
+function toolPreviewText(detail: string): string {
+  const trimmed = detail.trim()
+  if (isJsonText(trimmed)) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>
+      if (typeof parsed.description === 'string' && parsed.description.trim() !== '') {
+        return summarizeLine(parsed.description)
+      }
+      const file = parsed.file_path ?? parsed.path ?? parsed.file
+      if (typeof file === 'string' && file.trim() !== '') {
+        return summarizeLine(file)
+      }
+      if (typeof parsed.command === 'string' && parsed.command.trim() !== '') {
+        return summarizeLine(parsed.command)
+      }
+    } catch {
+      // Fall through to raw text preview.
+    }
+  }
+  return summarizeLine(detail)
+}
+
+function summarizeLine(text: string): string {
+  const single = text.replace(/\s+/g, ' ').trim()
+  return single.length > 90 ? `${single.slice(0, 90)}…` : single
+}
+
+function renderToolDetail(target: HTMLElement, detail: string): void {
+  const trimmed = detail.trim()
+  let source: string | undefined
+  if (isJsonText(trimmed)) {
+    try {
+      source = `\`\`\`json\n${JSON.stringify(JSON.parse(trimmed), null, 2)}\n\`\`\``
+    } catch {
+      source = undefined
+    }
+  } else if (looksLikeDiff(trimmed)) {
+    source = `\`\`\`diff\n${detail}\n\`\`\``
+  } else if (looksLikeCode(trimmed)) {
+    source = `\`\`\`\n${detail}\n\`\`\``
+  }
+  if (source === undefined) {
+    target.textContent = detail
+    return
+  }
+  target.classList.add('markdown-body')
+  renderMarkdown(target, source, markdownActions)
+}
+
+function isJsonText(text: string): boolean {
+  return (text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))
+}
+
+function looksLikeDiff(text: string): boolean {
+  return /^(?:diff --git |--- |\+\+\+ |@@ )/m.test(text)
+}
+
+function looksLikeCode(text: string): boolean {
+  return /(?:^|\n)\s*(?:function|const|let|var|def|class|import|from|export|return|if|for|while|public|private|async|await)\b/m.test(text)
+}
+
+function renderContext(item: ChatItem): HTMLElement {
+  const details = node('details', 'context-card') as HTMLDetailsElement
+  details.dataset.disclosureKey = 'context'
+  details.append(node('summary', '', item.title || t('context')))
+  const text = (item.blocks || []).map((block) => block.text).join('\n')
+  details.append(node('pre', '', text))
+  return details
+}

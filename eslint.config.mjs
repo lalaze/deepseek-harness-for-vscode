@@ -12,27 +12,6 @@ export default tseslint.config(
     languageOptions: { globals: { process: 'readonly' } },
   },
   {
-    files: ['media/chat.js'],
-    languageOptions: {
-      globals: {
-        acquireVsCodeApi: 'readonly',
-        document: 'readonly',
-        window: 'readonly',
-        FileReader: 'readonly',
-        Error: 'readonly',
-        clearTimeout: 'readonly',
-        setTimeout: 'readonly',
-        clearInterval: 'readonly',
-        setInterval: 'readonly',
-        requestAnimationFrame: 'readonly',
-        Map: 'readonly',
-        Set: 'readonly',
-        WeakMap: 'readonly',
-        navigator: 'readonly',
-      },
-    },
-  },
-  {
     files: ['src/**/*.ts', 'test/**/*.ts'],
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',

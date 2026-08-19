@@ -27,7 +27,7 @@ const contexts = await Promise.all([
     logLevel: 'info',
   }),
   esbuild.context({
-    entryPoints: ['media/chat.js'],
+    entryPoints: ['src/webview/chat/main.ts'],
     bundle: true,
     format: 'iife',
     platform: 'browser',
