@@ -626,7 +626,14 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 #configuration-source:disabled { opacity: .65; }
 .configuration-panel-scroll { min-height: 0; padding: 0 8px 8px; display: grid; gap: 7px; overflow-y: auto; overscroll-behavior: contain; }
 .configuration-group { display: grid; gap: 4px; }
-.configuration-group h3 { margin: 0; padding: 2px 5px; color: var(--vscode-descriptionForeground); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.configuration-group h3 { margin: 0; }
+.configuration-group-toggle { width: 100%; padding: 2px 5px; display: flex; align-items: center; gap: 5px; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; text-align: left; cursor: pointer; }
+.configuration-group-toggle:hover { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
+.configuration-group-chevron { flex: none; transition: transform 140ms ease; }
+.configuration-group:not(.collapsed) .configuration-group-chevron { transform: rotate(90deg); }
+.configuration-group.collapsed .configuration-options { display: none; }
+.configuration-group-current { min-width: 0; margin-left: auto; overflow: hidden; color: var(--vscode-descriptionForeground); font-weight: 400; text-transform: none; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-group:not(.collapsed) .configuration-group-current { display: none; }
 .configuration-options { display: grid; gap: 2px; }
 .configuration-model-group .configuration-options { grid-template-columns: 1fr; gap: 4px; }
 .configuration-model-group-header {

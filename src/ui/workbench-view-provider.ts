@@ -537,12 +537,24 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
             <button id="configuration-close" class="icon-button compact" type="button" title="${text('configurationClose')}" aria-label="${text('configurationClose')}">×</button>
           </header>
           <div class="configuration-panel-scroll">
-            <section class="configuration-group configuration-model-group" aria-labelledby="configuration-models-label">
-              <h3 id="configuration-models-label">${text('configurationModels')}</h3>
+            <section class="configuration-group configuration-model-group collapsed" aria-labelledby="configuration-models-label">
+              <h3 id="configuration-models-label">
+                <button id="configuration-models-toggle" class="configuration-group-toggle" type="button" aria-expanded="false" aria-controls="configuration-models">
+                  <span class="configuration-group-chevron" aria-hidden="true">›</span>
+                  <span>${text('configurationModels')}</span>
+                  <span id="configuration-models-current" class="configuration-group-current"></span>
+                </button>
+              </h3>
               <div id="configuration-models" class="configuration-options" role="listbox"></div>
             </section>
-            <section class="configuration-group" aria-labelledby="configuration-modes-label">
-              <h3 id="configuration-modes-label">${text('configurationModes')}</h3>
+            <section class="configuration-group collapsed" aria-labelledby="configuration-modes-label">
+              <h3 id="configuration-modes-label">
+                <button id="configuration-presets-toggle" class="configuration-group-toggle" type="button" aria-expanded="false" aria-controls="configuration-presets">
+                  <span class="configuration-group-chevron" aria-hidden="true">›</span>
+                  <span>${text('configurationModes')}</span>
+                  <span id="configuration-presets-current" class="configuration-group-current"></span>
+                </button>
+              </h3>
               <div id="configuration-presets" class="configuration-options" role="listbox"></div>
             </section>
           </div>

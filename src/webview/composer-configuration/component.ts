@@ -42,6 +42,10 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   private readonly source: HTMLSelectElement
   private readonly models: HTMLElement
   private readonly presets: HTMLElement
+  private readonly modelsToggle: HTMLButtonElement
+  private readonly presetsToggle: HTMLButtonElement
+  private readonly modelsCurrent: HTMLElement
+  private readonly presetsCurrent: HTMLElement
   private readonly effortControl: HTMLElement
   private readonly effortValue: HTMLElement
   private readonly effortSlider: HTMLInputElement
@@ -58,6 +62,10 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.source = requiredElement(document, 'configuration-source')
     this.models = requiredElement(document, 'configuration-models')
     this.presets = requiredElement(document, 'configuration-presets')
+    this.modelsToggle = requiredElement(document, 'configuration-models-toggle')
+    this.presetsToggle = requiredElement(document, 'configuration-presets-toggle')
+    this.modelsCurrent = requiredElement(document, 'configuration-models-current')
+    this.presetsCurrent = requiredElement(document, 'configuration-presets-current')
     this.effortControl = requiredElement(document, 'effort-control')
     this.effortValue = requiredElement(document, 'effort-value')
     this.effortSlider = requiredElement(document, 'effort-slider')
@@ -94,6 +102,9 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.panel.classList.remove('hidden')
     this.toggle.classList.add('active')
     this.toggle.setAttribute('aria-expanded', 'true')
+    // A targeted open (e.g. /model, /preset) must reveal its collapsed group.
+    if (section === 'model') this.expandGroup(this.modelsToggle)
+    if (section === 'preset') this.expandGroup(this.presetsToggle)
     const target = section === 'reasoning'
       ? this.effortSlider
       : section === 'preset'
@@ -108,12 +119,28 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.toggle.setAttribute('aria-expanded', 'false')
   }
 
+  /** Folder-style collapse for the Models / DSH Modes groups. */
+  private toggleGroup(toggle: HTMLButtonElement): void {
+    const group = toggle.closest('.configuration-group')
+    if (group === null) return
+    const collapsed = group.classList.toggle('collapsed')
+    toggle.setAttribute('aria-expanded', String(!collapsed))
+  }
+
+  private expandGroup(toggle: HTMLButtonElement): void {
+    toggle.closest('.configuration-group')?.classList.remove('collapsed')
+    toggle.setAttribute('aria-expanded', 'true')
+  }
+
   private bindEvents(): void {
     this.toggle.addEventListener('click', () => {
       if (this.panel.classList.contains('hidden')) this.open()
       else this.close()
     })
     this.closeButton.addEventListener('click', () => this.close())
+    for (const toggle of [this.modelsToggle, this.presetsToggle]) {
+      toggle.addEventListener('click', () => this.toggleGroup(toggle))
+    }
     this.source.addEventListener('change', () => {
       this.render(this.store.selectSource(this.source.value))
       this.options.onChange()
@@ -183,6 +210,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   }
 
   private renderModels(snapshot: ComposerConfigurationSnapshot): void {
+    this.modelsCurrent.textContent = snapshot.model.label
     const fragment = this.options.document.createDocumentFragment()
     const groups = new Map<string, ModelConfigurationOption[]>()
     for (const model of snapshot.input.models) {
@@ -209,6 +237,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   }
 
   private renderPresets(snapshot: ComposerConfigurationSnapshot): void {
+    this.presetsCurrent.textContent = snapshot.preset.label
     const fragment = this.options.document.createDocumentFragment()
     for (const preset of snapshot.input.presets) {
       const active = preset.id === snapshot.selection.agentPreset
