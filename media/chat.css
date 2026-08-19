@@ -722,6 +722,10 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .effort-thumb { position: absolute; top: 4px; left: calc(7px + (100% - 37px) * var(--effort-position)); z-index: 4; box-sizing: border-box; width: 23px; height: 23px; pointer-events: none; background: #fff; border: 3px solid color-mix(in srgb, var(--effort-color) 88%, #fff); border-radius: 50%; box-shadow: 0 1px 5px color-mix(in srgb, #000 42%, transparent); transition: left 240ms cubic-bezier(.3, .9, .3, 1), border-color 160ms ease, transform 120ms ease; }
 .effort-slider-row:hover .effort-thumb { transform: scale(1.08); }
 .effort-slider-row:active .effort-thumb { transform: scale(1.14); }
+/* While dragging, the pointer owns the knob/fill position, so the settle
+   transitions must not lag behind it. */
+.effort-control.dragging .effort-thumb { transition: border-color 160ms ease, transform 120ms ease; }
+.effort-control.dragging #effort-slider { transition: background-color 160ms ease, border-color 160ms ease; }
 .effort-ticks { position: absolute; top: 0; left: 11px; right: 11px; z-index: 3; height: 50px; pointer-events: none; }
 .effort-tick { position: absolute; left: var(--effort-stop); bottom: 0; min-width: 34px; height: 18px; padding: 0 3px; transform: translateX(-50%); pointer-events: auto; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 6px; font-size: 10px; line-height: 18px; }
 .effort-tick::before { content: ''; position: absolute; top: -19px; left: 50%; width: 6px; height: 6px; transform: translateX(-50%); background: color-mix(in srgb, var(--vscode-descriptionForeground) 48%, transparent); border-radius: 50%; }

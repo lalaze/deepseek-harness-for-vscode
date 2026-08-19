@@ -35,6 +35,7 @@ export function createComposerConfigurationComponent(options: ComponentOptions):
 
 class ComposerConfigurationDom implements ComposerConfigurationComponent {
   private readonly store = new ComposerConfigurationStore()
+  private effortDragging = false
   private readonly panel: HTMLElement
   private readonly toggle: HTMLButtonElement
   private readonly toggleModel: HTMLElement
@@ -149,6 +150,9 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     this.effortSlider.addEventListener('input', () => {
       this.changeReasoning(Number(this.effortSlider.value))
     })
+    this.effortSlider.addEventListener('pointerdown', (event) => {
+      if (event.button === 0) this.beginEffortDrag()
+    })
     this.effortSlider.addEventListener('wheel', (event) => {
       event.preventDefault()
       const direction = event.deltaY > 0 ? 1 : -1
@@ -166,6 +170,43 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
         this.toggle.focus()
       }
     })
+  }
+
+  /**
+   * Tracks the pointer during a drag so the knob and fill follow it
+   * continuously (stepped range inputs otherwise jump detent to detent);
+   * on release the control settles onto the committed detent with the
+   * normal transition.
+   */
+  private beginEffortDrag(): void {
+    if (this.effortSlider.disabled || this.effortDragging) return
+    const row = this.effortSlider.parentElement
+    if (row === null) return
+    this.effortDragging = true
+    this.effortControl.classList.add('dragging')
+    const document = this.options.document
+    const move = (event: PointerEvent) => {
+      const rect = row.getBoundingClientRect()
+      if (rect.width <= 37) return
+      // Thumb centre travels from 18.5px to width - 18.5px (7px padding plus
+      // half of the 23px knob on each side).
+      const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - 18.5) / (rect.width - 37)))
+      this.effortControl.style.setProperty('--effort-position', String(fraction))
+      this.effortControl.style.setProperty('--effort-progress', `${fraction * 100}%`)
+    }
+    const end = () => {
+      this.effortDragging = false
+      this.effortControl.classList.remove('dragging')
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', end)
+      document.removeEventListener('pointercancel', end)
+      // Settle onto the committed detent with the transition re-enabled.
+      const snapshot = this.store.snapshot()
+      if (snapshot !== undefined) this.renderEffort(snapshot)
+    }
+    document.addEventListener('pointermove', move)
+    document.addEventListener('pointerup', end)
+    document.addEventListener('pointercancel', end)
   }
 
   /** Applies a user-driven reasoning change and pops the tier flourish. */
@@ -285,8 +326,11 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     const fraction = snapshot.reasoning.length <= 1
       ? 0
       : snapshot.effortIndex / (snapshot.reasoning.length - 1)
-    this.effortControl.style.setProperty('--effort-progress', `${fraction * 100}%`)
-    this.effortControl.style.setProperty('--effort-position', String(fraction))
+    // While dragging, the pointer owns the knob/fill position.
+    if (!this.effortDragging) {
+      this.effortControl.style.setProperty('--effort-progress', `${fraction * 100}%`)
+      this.effortControl.style.setProperty('--effort-position', String(fraction))
+    }
     const fragment = this.options.document.createDocumentFragment()
     snapshot.reasoning.forEach((effort, index) => {
       const button = this.options.document.createElement('button')
