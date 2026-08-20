@@ -6,6 +6,13 @@ const EOCD_HEADER = 0x06054b50
 export const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 export const MAX_ENTRY_BYTES = 128 * 1024 * 1024
 
+/** Throws when a ZIP's reported or actual size exceeds the import cap. */
+export function assertArchiveFitsLimit(size: number, maxBytes = MAX_ARCHIVE_BYTES): void {
+  if (size > maxBytes) {
+    throw new Error(`Archive is too large (${size} bytes).`)
+  }
+}
+
 export interface ExtractArchiveLimits {
   readonly maxArchiveBytes?: number
   readonly maxEntryBytes?: number
@@ -37,9 +44,7 @@ export function extractSessionArchive(
   limits: ExtractArchiveLimits = {},
 ): readonly SessionArchiveEntry[] {
   const maxArchiveBytes = limits.maxArchiveBytes ?? MAX_ARCHIVE_BYTES
-  if (bytes.byteLength > maxArchiveBytes) {
-    throw new Error(`Archive is too large (${bytes.byteLength} bytes).`)
-  }
+  assertArchiveFitsLimit(bytes.byteLength, maxArchiveBytes)
   return readZipEntries(bytes, keep, {
     maxEntryBytes: limits.maxEntryBytes ?? MAX_ENTRY_BYTES,
     maxTotalBytes: limits.maxTotalBytes ?? maxArchiveBytes,

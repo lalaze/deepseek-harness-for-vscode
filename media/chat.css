@@ -53,7 +53,7 @@ body.vscode-dark .brand-logo, body.vscode-high-contrast .brand-logo { filter: in
   justify-content: center;
   font-weight: 600;
   line-height: 1;
-  -webkit-text-stroke: 0.18px currentColor;
+  -webkit-text-stroke: 0.18px currentcolor;
 }
 .connection { display: inline-flex; align-items: center; gap: 4px; color: var(--vscode-descriptionForeground); font-size: 10px; font-weight: 400; }
 .connection::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--vscode-descriptionForeground); }

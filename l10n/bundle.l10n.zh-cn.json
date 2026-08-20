@@ -28,6 +28,7 @@
   "Looking for local agent sessions…": "正在查找本机 Agent 会话…",
   "Session import is unavailable. Reload the workbench after installing dsh-chat-import.": "会话导入不可用。安装 dsh-chat-import 后请重新加载工作台。",
   "This ZIP is not a DeepSeek Harness session export or a ChatGPT conversations archive.": "这个 ZIP 不是 DeepSeek Harness 会话导出包，也不是 ChatGPT conversations 归档。",
+  "This ZIP is too large to import ({0} bytes).": "这个 ZIP 过大，无法导入（{0} 字节）。",
   "No importable sessions were found in {0}.": "在 {0} 中没有找到可导入的会话。",
   "No importable sessions were selected.": "没有选择可导入的会话。",
   "Session import uses the dsh-chat-import plugin. Install it now?": "导入会话需要 dsh-chat-import 插件，现在安装吗？",

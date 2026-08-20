@@ -6,6 +6,7 @@ import type { HarnessGatewayService } from '../gateway/harness-gateway-service.j
 import { NodeGatewayClient } from '../gateway/node-gateway-client.js'
 import type { DshPluginManager } from '../plugins/plugin-manager.js'
 import {
+  MAX_ARCHIVE_BYTES,
   chatgptConversationsPath,
   dshSessionJsonlPaths,
   extractSessionArchive,
@@ -176,6 +177,9 @@ export class SessionImportService {
       return await this.discoverPath(client, target.fsPath)
     }
     if (target.fsPath.toLowerCase().endsWith('.zip')) {
+      if (stat.size > MAX_ARCHIVE_BYTES) {
+        throw new Error(vscode.l10n.t('This ZIP is too large to import ({0} bytes).', String(stat.size)))
+      }
       return await this.itemsFromZip(target, leftovers)
     }
     return await this.discoverPath(client, target.fsPath)

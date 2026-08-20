@@ -1,6 +1,8 @@
 import { deflateRawSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_ARCHIVE_BYTES,
+  assertArchiveFitsLimit,
   classifyArchive,
   dshSessionJsonlPaths,
   extractSessionArchive,
@@ -77,6 +79,12 @@ describe('session archive ZIP', () => {
       { name: 'subagents/child/session.jsonl', data: 'klmnopqrst', method: 0 },
     ])
     expect(() => extractSessionArchive(bulk, undefined, { maxTotalBytes: 12 })).toThrow(/extracted size is too large/)
+  })
+
+  it('rejects archive metadata that exceeds the selected ZIP size limit', () => {
+    expect(() => assertArchiveFitsLimit(MAX_ARCHIVE_BYTES + 1)).toThrow(/Archive is too large/)
+    expect(() => assertArchiveFitsLimit(MAX_ARCHIVE_BYTES)).not.toThrow()
+    expect(() => extractSessionArchive(new Uint8Array(20), undefined, { maxArchiveBytes: 10 })).toThrow(/Archive is too large/)
   })
 })
 

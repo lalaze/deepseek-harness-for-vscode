@@ -96,15 +96,14 @@ export class NodeGatewayClient extends AbstractApiClient {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(this.importTimeoutMs),
     }).catch((cause: unknown) => {
-      if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {
-        throw new Error(`Import API ${path} timed out after ${String(this.importTimeoutMs)}ms`)
-      }
-      throw cause
+      throw timedOutImport(path, this.importTimeoutMs, cause)
     })
     if (response.status === 404) {
       throw new Error('SESSION_IMPORT_UNAVAILABLE')
     }
-    const text = await response.text()
+    const text = await response.text().catch((cause: unknown) => {
+      throw timedOutImport(path, this.importTimeoutMs, cause)
+    })
     let parsed: T
     try {
       parsed = JSON.parse(text) as T
@@ -224,6 +223,13 @@ export class NodeGatewayClient extends AbstractApiClient {
       abort()
     }
   }
+}
+
+function timedOutImport(path: string, timeoutMs: number, cause: unknown): Error {
+  if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {
+    return new Error(`Import API ${path} timed out after ${String(timeoutMs)}ms`)
+  }
+  return cause instanceof Error ? cause : new Error(String(cause))
 }
 
 function rawDataText(data: RawData): string {
