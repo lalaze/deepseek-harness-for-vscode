@@ -253,6 +253,7 @@
   "No matching workspace files.": "没有匹配的工作区文件。",
   "Plans, Skills, and background jobs": "计划、Skills 与后台任务",
   "Harness file and command permissions": "Harness 文件和命令权限",
+  "Permissions": "权限",
   "Send": "发送",
   "Send (Enter)": "发送 (Enter)",
   "Stop generating": "停止生成",

@@ -118,6 +118,7 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   context: 'Context',
   contextDescription: 'Plans, Skills, and background jobs',
   permissionDescription: 'Harness file and command permissions',
+  permissionLabel: 'Permissions',
   send: 'Send',
   sendTitle: 'Send (Enter)',
   stopGenerating: 'Stop generating',

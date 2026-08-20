@@ -51,7 +51,11 @@ export interface ChatElements {
   readonly backParent: HTMLElement
   readonly fork: HTMLButtonElement
   readonly exportSession: HTMLElement
-  readonly permission: HTMLSelectElement
+  readonly permission: HTMLElement
+  readonly permissionToggle: HTMLButtonElement
+  readonly permissionToggleLabel: HTMLElement
+  readonly permissionPopup: HTMLElement
+  readonly permissionOptions: HTMLElement
   readonly keyBanner: HTMLElement
   readonly setApiKey: HTMLElement
   readonly openSettings: HTMLElement
