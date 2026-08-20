@@ -603,6 +603,14 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
                 <div class="permission-popup-title">${text('permissionLabel')}</div>
                 <div id="permission-options" class="permission-options" role="presentation"></div>
               </div>
+              <div id="permission-confirm" class="permission-confirm hidden" role="alertdialog" aria-labelledby="permission-confirm-title" aria-describedby="permission-confirm-warning">
+                <div id="permission-confirm-title" class="permission-confirm-title">⚠ ${text('permissionFullAccessTitle')}</div>
+                <p id="permission-confirm-warning" class="permission-confirm-warning">${text('permissionFullAccessWarning')}</p>
+                <div class="permission-confirm-actions">
+                  <button id="permission-confirm-cancel" class="permission-confirm-cancel" type="button">${text('cancel')}</button>
+                  <button id="permission-confirm-accept" class="permission-confirm-accept" type="button">${text('permissionFullAccessConfirm')}</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="composer-meta">

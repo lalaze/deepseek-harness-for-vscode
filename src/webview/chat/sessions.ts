@@ -1,4 +1,5 @@
 import type { ActiveSessionView, PermissionView } from '../../domain/workbench-state.js'
+import { FULL_ACCESS_PERMISSION_ID } from '../../domain/permissions.js'
 import { composerConfigurationInput } from '../composer-configuration/adapter.js'
 import { permissionSelectOptions } from '../permission/adapter.js'
 import { clearPastedImages } from './images.js'
@@ -99,6 +100,13 @@ function renderPermissionOptions(permissions: PermissionView): void {
       button.disabled = true
     } else {
       button.addEventListener('click', () => {
+        // Full access bypasses every prompt; require an explicit confirmation
+        // first, like the Codex picker and the official Web UI do.
+        if (item.id === FULL_ACCESS_PERMISSION_ID && permissions.currentValue !== FULL_ACCESS_PERMISSION_ID) {
+          closePermissionPopup()
+          openPermissionConfirm()
+          return
+        }
         post('setPermission', { value: item.id })
         closePermissionPopup()
       })
@@ -115,6 +123,7 @@ export function togglePermissionPopup(): void {
 
 function openPermissionPopup(): void {
   if (elements.permissionToggle.disabled) return
+  closePermissionConfirm()
   elements.permissionPopup.classList.remove('hidden')
   elements.permissionToggle.classList.add('active')
   elements.permissionToggle.setAttribute('aria-expanded', 'true')
@@ -124,6 +133,16 @@ export function closePermissionPopup(): void {
   elements.permissionPopup.classList.add('hidden')
   elements.permissionToggle.classList.remove('active')
   elements.permissionToggle.setAttribute('aria-expanded', 'false')
+}
+
+export function openPermissionConfirm(): void {
+  elements.permissionConfirm.classList.remove('hidden')
+  elements.permissionConfirmAccept.focus()
+}
+
+export function closePermissionConfirm(refocus = false): void {
+  elements.permissionConfirm.classList.add('hidden')
+  if (refocus) elements.permissionToggle.focus()
 }
 
 export function toggleHistory(open: boolean): void {

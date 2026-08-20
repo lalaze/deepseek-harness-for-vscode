@@ -1040,6 +1040,31 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .permission-option.active { color: var(--vscode-list-activeSelectionForeground); background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 78%, transparent); border-color: color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent); }
 .permission-option-check { color: var(--vscode-list-activeSelectionForeground); text-align: right; }
 .permission-option:disabled { opacity: .5; cursor: default; }
+/* Safety gate shown before danger-full-access applies, mirroring the Codex
+   and official Web UI confirmation. */
+.permission-confirm {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 26;
+  width: min(264px, calc(100vw - 16px));
+  display: grid;
+  gap: 7px;
+  padding: 10px 11px;
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 45%, var(--vscode-widget-border));
+  border-radius: 12px;
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 34%, transparent);
+}
+.permission-confirm-title { color: var(--vscode-errorForeground, #f14c4c); font-size: 12px; font-weight: 600; }
+.permission-confirm-warning { margin: 0; color: var(--vscode-foreground); font-size: 11px; line-height: 1.5; opacity: .86; }
+.permission-confirm-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.permission-confirm-cancel { padding: 4px 10px; color: var(--vscode-foreground); background: transparent; border: 1px solid var(--vscode-widget-border); border-radius: 7px; font-size: 11px; cursor: pointer; }
+.permission-confirm-cancel:hover { background: var(--vscode-toolbar-hoverBackground); }
+.permission-confirm-accept { padding: 4px 10px; color: #fff; background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 82%, #000); border: 0; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.permission-confirm-accept:hover { background: var(--vscode-errorForeground, #f14c4c); }
+.permission-confirm-cancel:focus-visible, .permission-confirm-accept:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 .composer-status { min-width: 0; flex: 1; overflow: hidden; color: var(--vscode-descriptionForeground); text-align: right; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 .context-meter {
   --context-color: var(--vscode-charts-blue, #4d8cff);
