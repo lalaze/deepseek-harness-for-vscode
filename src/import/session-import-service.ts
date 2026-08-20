@@ -12,7 +12,7 @@ import {
   extractSessionArchive,
   inspectSessionArchive,
 } from './session-archive.js'
-import type { ImportDiscoveryItem, ImportRequestItem, ImportResultItem } from './types.js'
+import type { ImportDiscoverResult, ImportDiscoveryItem, ImportRequestItem, ImportResultItem } from './types.js'
 
 const CHAT_IMPORT_PACKAGE = 'dsh-chat-import'
 
@@ -104,13 +104,18 @@ export class SessionImportService {
   private async importDiscovered(): Promise<void> {
     if (!await this.prepareImport()) return
     const client = this.requireClient()
-    const discovered = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: vscode.l10n.t('Looking for local agent sessions…'),
-      },
-      async () => client.discoverImportSessions({}),
-    )
+    let discovered: ImportDiscoverResult
+    try {
+      discovered = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: vscode.l10n.t('Looking for local agent sessions…'),
+        },
+        async () => client.discoverImportSessions({}),
+      )
+    } catch (cause) {
+      throw userFacingImportError(cause)
+    }
     const importable = discovered.sessions.filter((session) => discoveryToRequest(session).source !== '')
     if (importable.length === 0) {
       throw new Error(vscode.l10n.t('No local agent sessions were found.'))
@@ -156,11 +161,7 @@ export class SessionImportService {
         async () => work(this.requireClient()),
       )
     } catch (cause) {
-      const detail = cause instanceof Error ? cause.message : String(cause)
-      if (detail === 'SESSION_IMPORT_UNAVAILABLE') {
-        throw new Error(vscode.l10n.t('Session import is unavailable. Reload the workbench after installing dsh-chat-import.'))
-      }
-      throw cause
+      throw userFacingImportError(cause)
     }
     if (results === undefined) return
     await this.gateway.reloadSessions(firstImportedSessionId(results))
@@ -271,6 +272,14 @@ async function writeExtractedFiles(
     await mkdir(path.dirname(target), { recursive: true })
     await writeFile(target, entry.data)
   }
+}
+
+function userFacingImportError(cause: unknown): Error {
+  const detail = cause instanceof Error ? cause.message : String(cause)
+  if (detail === 'SESSION_IMPORT_UNAVAILABLE') {
+    return new Error(vscode.l10n.t('Session import is unavailable. Reload the workbench after installing dsh-chat-import.'))
+  }
+  return cause instanceof Error ? cause : new Error(detail)
 }
 
 function discoveryToRequest(session: ImportDiscoveryItem): ImportRequestItem {

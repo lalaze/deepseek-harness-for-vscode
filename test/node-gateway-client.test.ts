@@ -115,4 +115,32 @@ describe('NodeGatewayClient Remote carrier', () => {
     const client = new NodeGatewayClient(`http://127.0.0.1:${address.port}`, 50)
     await expect(client.discoverImportSessions()).rejects.toThrow(/timed out after 50ms/)
   })
+
+  it('rejects a discovery payload that is not an object', async () => {
+    const client = await clientAgainstJson('[]')
+    await expect(client.discoverImportSessions()).rejects.toThrow(/invalid JSON payload/)
+  })
+
+  it('rejects a discovery payload that is missing sessions', async () => {
+    const client = await clientAgainstJson('{"ok":true}')
+    await expect(client.discoverImportSessions()).rejects.toThrow(/missing sessions/)
+  })
+
+  it('rejects an import payload that is missing results', async () => {
+    const client = await clientAgainstJson('{"ok":true}')
+    await expect(client.importDiscoveredSessions({
+      items: [{ source: 'dsh', sourcePath: 'C:/tmp/session.jsonl' }],
+    })).rejects.toThrow(/missing results/)
+  })
 })
+
+async function clientAgainstJson(body: string): Promise<NodeGatewayClient> {
+  const server = createServer((_request, response) => {
+    response.setHeader('content-type', 'application/json')
+    response.end(body)
+  })
+  servers.push(server)
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address() as AddressInfo
+  return new NodeGatewayClient(`http://127.0.0.1:${address.port}`)
+}

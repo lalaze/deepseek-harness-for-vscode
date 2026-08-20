@@ -10,11 +10,13 @@ import type {
 import { hostFrameSchema, muxFrameSchema } from '@deepseek-ai/dsh-host-apiproxy/api/events.schema'
 import { serverRequestSchema, serverResponseSchema } from '@deepseek-ai/dsh-host-apiproxy/api/rpc.schema'
 import { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
-import type {
-  ImportDiscoverRequest,
-  ImportDiscoverResult,
-  ImportRequest,
-  ImportResult,
+import {
+  parseImportDiscoverResult,
+  parseImportResult,
+  type ImportDiscoverRequest,
+  type ImportDiscoverResult,
+  type ImportRequest,
+  type ImportResult,
 } from '../import/types.js'
 
 type FrameParser<F> = { parse(value: unknown): F }
@@ -78,17 +80,18 @@ export class NodeGatewayClient extends AbstractApiClient {
 
   /** Lists importable sessions through the dsh-chat-import panel API. */
   async discoverImportSessions(request: ImportDiscoverRequest = {}): Promise<ImportDiscoverResult> {
-    return await this.postImportApi<ImportDiscoverResult>('/api-import/sessions', request)
+    return await this.postImportApi('/api-import/sessions', request, parseImportDiscoverResult)
   }
 
   /** Imports discovered sessions through the dsh-chat-import panel API. */
   async importDiscoveredSessions(request: ImportRequest): Promise<ImportResult> {
-    return await this.postImportApi<ImportResult>('/api-import/import', request)
+    return await this.postImportApi('/api-import/import', request, parseImportResult)
   }
 
-  private async postImportApi<T extends { readonly ok: boolean; readonly error?: string }>(
+  private async postImportApi<T>(
     path: string,
     body: unknown,
+    parse: (value: unknown) => T,
   ): Promise<T> {
     const response = await this.doFetch(new URL(path, this.baseUrl), {
       method: 'POST',
@@ -104,16 +107,26 @@ export class NodeGatewayClient extends AbstractApiClient {
     const text = await response.text().catch((cause: unknown) => {
       throw timedOutImport(path, this.importTimeoutMs, cause)
     })
-    let parsed: T
+    let parsed: unknown
     try {
-      parsed = JSON.parse(text) as T
+      parsed = JSON.parse(text) as unknown
     } catch {
       throw new Error(`Import API ${path} returned HTTP ${response.status}${text === '' ? '' : `: ${text}`}`)
     }
-    if (!response.ok || parsed.ok === false) {
-      throw new Error(parsed.error ?? `Import API ${path} failed: HTTP ${response.status}`)
+    if (!response.ok) {
+      const record = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : undefined
+      throw new Error(
+        typeof record?.error === 'string' ? record.error : `Import API ${path} failed: HTTP ${response.status}`,
+      )
     }
-    return parsed
+    try {
+      return parse(parsed)
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause)
+      throw new Error(`Import API ${path} returned HTTP ${response.status}: ${detail}`)
+    }
   }
 
   /**
