@@ -235,6 +235,7 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
   private render(snapshot: ComposerConfigurationSnapshot | undefined): void {
     if (snapshot === undefined) {
       this.toggle.disabled = true
+      delete this.toggle.dataset.effort
       this.close()
       return
     }
@@ -249,6 +250,8 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
       effort: snapshot.effort.label,
     })
     this.toggle.classList.toggle('pending', snapshot.dirty)
+    // Tints the toggle icon (and pending ring) with the active effort tone.
+    this.toggle.dataset.effort = snapshot.effortTone
     this.renderSources(snapshot)
     this.renderModels(snapshot)
     this.renderPresets(snapshot)
