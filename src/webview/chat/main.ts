@@ -24,7 +24,8 @@ import {
 } from './context.js'
 import { renderDetails } from './details.js'
 import { addPastedImages, clearPastedImages, closeImagePreview } from './images.js'
-import { closePermissionPopup, renderSessions, toggleHistory, togglePermissionPopup } from './sessions.js'
+import { closePermissionConfirm, closePermissionPopup, renderSessions, toggleHistory, togglePermissionPopup } from './sessions.js'
+import { FULL_ACCESS_PERMISSION_ID } from '../../domain/permissions.js'
 import { closeTimeline, openTimeline } from './timeline.js'
 
 window.addEventListener('message', (event) => {
@@ -183,6 +184,11 @@ document.addEventListener('keydown', (event) => {
     closeImagePreview()
     return
   }
+  if (!elements.permissionConfirm.classList.contains('hidden')) {
+    event.preventDefault()
+    closePermissionConfirm(true)
+    return
+  }
   if (!elements.permissionPopup.classList.contains('hidden')) {
     event.preventDefault()
     closePermissionPopup()
@@ -204,6 +210,13 @@ elements.permissionToggle.addEventListener('click', (event) => {
   event.stopPropagation()
   togglePermissionPopup()
 })
+elements.permissionConfirmAccept.addEventListener('click', () => {
+  post('setPermission', { value: FULL_ACCESS_PERMISSION_ID })
+  closePermissionConfirm()
+})
+elements.permissionConfirmCancel.addEventListener('click', () => {
+  closePermissionConfirm(true)
+})
 elements.timelineToggle.addEventListener('click', (event) => {
   event.stopPropagation()
   if (elements.timelinePanel.classList.contains('hidden')) openTimeline()
@@ -224,6 +237,12 @@ document.addEventListener('pointerdown', (event) => {
     && !elements.permission.contains(target)
   ) {
     closePermissionPopup()
+  }
+  if (
+    !elements.permissionConfirm.classList.contains('hidden')
+    && !elements.permission.contains(target)
+  ) {
+    closePermissionConfirm()
   }
 })
 for (const tab of Array.from(document.querySelectorAll<HTMLElement>('[data-detail]'))) {

@@ -7,6 +7,9 @@ export const PERMISSION_PRESET_IDS = [
 
 export type PermissionPresetId = typeof PERMISSION_PRESET_IDS[number]
 
+/** The unsafe preset that must be confirmed before it is applied. */
+export const FULL_ACCESS_PERMISSION_ID: PermissionPresetId = 'danger-full-access'
+
 /** Narrows untrusted Webview or settings input to a Harness permission preset. */
 export function isPermissionPresetId(value: unknown): value is PermissionPresetId {
   return typeof value === 'string'
