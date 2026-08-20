@@ -45,6 +45,16 @@ body.vscode-dark .brand-logo, body.vscode-high-contrast .brand-logo { filter: in
 }
 .icon-button:hover, .text-button:hover { background: var(--vscode-toolbar-hoverBackground); }
 .icon-button.compact { width: 23px; height: 23px; }
+#fork,
+#import-session,
+#export-session {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  line-height: 1;
+  -webkit-text-stroke: 0.18px currentColor;
+}
 .connection { display: inline-flex; align-items: center; gap: 4px; color: var(--vscode-descriptionForeground); font-size: 10px; font-weight: 400; }
 .connection::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--vscode-descriptionForeground); }
 .connection.connected::before { background: var(--vscode-testing-iconPassed, #40a02b); }
