@@ -10,6 +10,14 @@ import type {
 import { hostFrameSchema, muxFrameSchema } from '@deepseek-ai/dsh-host-apiproxy/api/events.schema'
 import { serverRequestSchema, serverResponseSchema } from '@deepseek-ai/dsh-host-apiproxy/api/rpc.schema'
 import { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
+import {
+  parseImportDiscoverResult,
+  parseImportResult,
+  type ImportDiscoverRequest,
+  type ImportDiscoverResult,
+  type ImportRequest,
+  type ImportResult,
+} from '../import/types.js'
 
 type FrameParser<F> = { parse(value: unknown): F }
 type SocketItem<F> = { readonly kind: 'frame'; readonly envelope: RpcRequest<F> } | { readonly kind: 'end' }
@@ -33,7 +41,10 @@ export interface HostCommandExecution {
  * not a browser and does not expose the Harness browser module loader.
  */
 export class NodeGatewayClient extends AbstractApiClient {
-  constructor(private readonly baseUrl: string) {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly importTimeoutMs = 30_000,
+  ) {
     super(30_000)
   }
 
@@ -65,6 +76,57 @@ export class NodeGatewayClient extends AbstractApiClient {
       throw new Error(`Export failed: HTTP ${response.status}${detail === '' ? '' : ` ${detail}`}`)
     }
     return new Uint8Array(await response.arrayBuffer())
+  }
+
+  /** Lists importable sessions through the dsh-chat-import panel API. */
+  async discoverImportSessions(request: ImportDiscoverRequest = {}): Promise<ImportDiscoverResult> {
+    return await this.postImportApi('/api-import/sessions', request, parseImportDiscoverResult)
+  }
+
+  /** Imports discovered sessions through the dsh-chat-import panel API. */
+  async importDiscoveredSessions(request: ImportRequest): Promise<ImportResult> {
+    return await this.postImportApi('/api-import/import', request, parseImportResult)
+  }
+
+  private async postImportApi<T>(
+    path: string,
+    body: unknown,
+    parse: (value: unknown) => T,
+  ): Promise<T> {
+    const response = await this.doFetch(new URL(path, this.baseUrl), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.importTimeoutMs),
+    }).catch((cause: unknown) => {
+      throw timedOutImport(path, this.importTimeoutMs, cause)
+    })
+    if (response.status === 404) {
+      throw new Error('SESSION_IMPORT_UNAVAILABLE')
+    }
+    const text = await response.text().catch((cause: unknown) => {
+      throw timedOutImport(path, this.importTimeoutMs, cause)
+    })
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text) as unknown
+    } catch {
+      throw new Error(`Import API ${path} returned HTTP ${response.status}${text === '' ? '' : `: ${text}`}`)
+    }
+    if (!response.ok) {
+      const record = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : undefined
+      throw new Error(
+        typeof record?.error === 'string' ? record.error : `Import API ${path} failed: HTTP ${response.status}`,
+      )
+    }
+    try {
+      return parse(parsed)
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause)
+      throw new Error(`Import API ${path} returned HTTP ${response.status}: ${detail}`)
+    }
   }
 
   /**
@@ -174,6 +236,13 @@ export class NodeGatewayClient extends AbstractApiClient {
       abort()
     }
   }
+}
+
+function timedOutImport(path: string, timeoutMs: number, cause: unknown): Error {
+  if (cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')) {
+    return new Error(`Import API ${path} timed out after ${String(timeoutMs)}ms`)
+  }
+  return cause instanceof Error ? cause : new Error(String(cause))
 }
 
 function rawDataText(data: RawData): string {

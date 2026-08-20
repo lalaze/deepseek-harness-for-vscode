@@ -23,6 +23,8 @@ export const elements: ChatElements = {
   sessionTitle: byId<HTMLButtonElement>('session-title'),
   backParent: byId<HTMLElement>('back-parent'),
   fork: byId<HTMLButtonElement>('fork'),
+  importSession: byId<HTMLElement>('import-session'),
+  historyImport: byId<HTMLElement>('history-import'),
   exportSession: byId<HTMLElement>('export-session'),
   permission: byId<HTMLElement>('permission'),
   permissionToggle: byId<HTMLButtonElement>('permission-toggle'),

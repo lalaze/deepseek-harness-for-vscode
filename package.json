@@ -71,6 +71,11 @@
       {
         "command": "deepseekHarness.showLogs",
         "title": "%command.showLogs%"
+      },
+      {
+        "command": "deepseekHarness.importSession",
+        "title": "%command.importSession%",
+        "icon": "$(cloud-download)"
       }
     ],
     "viewsContainers": {
@@ -107,6 +112,11 @@
           "command": "deepseekHarness.showLogs",
           "when": "view == deepseekHarness.chatView",
           "group": "navigation@2"
+        },
+        {
+          "command": "deepseekHarness.importSession",
+          "when": "view == deepseekHarness.chatView",
+          "group": "navigation@4"
         }
       ]
     },

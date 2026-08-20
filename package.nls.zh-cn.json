@@ -6,6 +6,7 @@
   "command.setApiKey": "DeepSeek Harness: 设置 API Key",
   "command.clearApiKey": "DeepSeek Harness: 清除 API Key",
   "command.showLogs": "DeepSeek Harness: 显示日志",
+  "command.importSession": "DeepSeek Harness: 导入会话",
   "view.chat": "对话",
   "config.model": "Harness 新会话默认使用的模型。",
   "config.model.flash": "DeepSeek V4 Flash，响应更快。",

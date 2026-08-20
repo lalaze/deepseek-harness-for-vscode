@@ -11,6 +11,7 @@ import type { InstalledDshPlugin } from './types.js'
 
 const PROFILE = 'web'
 const DEFAULT_PLUGINS_SEED_FILE = 'default-plugins-seeded.json'
+const DEFAULT_PLUGINS_SEED_VERSION = 2
 const MAX_ERROR_OUTPUT = 12_000
 
 /** Manages the exact `web` profile booted by this extension through DSH's CLI. */
@@ -74,9 +75,9 @@ export class DshPluginManager {
     return resolved.sort((left, right) => left.name.localeCompare(right.name))
   }
 
-  /** Installs the extension's default built-in plugins once when they are missing. */
+  /** Installs missing default plugins, including newly added built-ins after a seed bump. */
   async ensureDefaultPlugins(): Promise<void> {
-    if (await this.defaultPluginsSeeded()) return
+    if (await this.defaultPluginsSeedVersion() >= DEFAULT_PLUGINS_SEED_VERSION) return
     const installed = await this.listInstalled()
     const installedNames = new Set(installed.map((item) => item.name))
     for (const plugin of DEFAULT_BUILTIN_PLUGINS) {
@@ -160,19 +161,16 @@ export class DshPluginManager {
     return isRecord(profile) ? stringRecord(profile.dependencies) : {}
   }
 
-  private async defaultPluginsSeeded(): Promise<boolean> {
-    try {
-      await readFile(path.join(this.harnessHome(), DEFAULT_PLUGINS_SEED_FILE), 'utf8')
-      return true
-    } catch {
-      return false
-    }
+  private async defaultPluginsSeedVersion(): Promise<number> {
+    const raw = await readJson(path.join(this.harnessHome(), DEFAULT_PLUGINS_SEED_FILE))
+    if (!isRecord(raw)) return 0
+    return typeof raw.version === 'number' ? raw.version : 1
   }
 
   private async markDefaultPluginsSeeded(): Promise<void> {
     await writeFile(
       path.join(this.harnessHome(), DEFAULT_PLUGINS_SEED_FILE),
-      `${JSON.stringify({ version: 1 })}\n`,
+      `${JSON.stringify({ version: DEFAULT_PLUGINS_SEED_VERSION })}\n`,
       'utf8',
     )
   }
