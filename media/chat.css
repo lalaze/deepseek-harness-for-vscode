@@ -1082,7 +1082,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .context-meter-ring { width: 18px; height: 18px; position: relative; display: block; background: conic-gradient(var(--context-color) var(--context-progress), color-mix(in srgb, var(--vscode-descriptionForeground) 24%, transparent) 0); border-radius: 50%; transition: background 180ms ease; }
 .context-meter-ring::after { content: ''; position: absolute; inset: 3px; background: var(--vscode-input-background); border-radius: 50%; }
 .context-meter-value { min-width: 22px; white-space: nowrap; }
-.configuration-toggle { width: auto; min-width: 0; max-width: 150px; height: 32px; padding: 4px 7px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 5px; align-items: center; overflow: hidden; color: var(--vscode-foreground); background: color-mix(in srgb, var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background)) 70%, transparent); border: 1px solid var(--vscode-widget-border); border-radius: 10px; }
+.configuration-toggle { width: auto; min-width: 0; height: 32px; padding: 4px 7px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 5px; align-items: center; overflow: hidden; color: var(--vscode-foreground); background: color-mix(in srgb, var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background)) 70%, transparent); border: 1px solid var(--vscode-widget-border); border-radius: 10px; }
 .configuration-toggle:hover, .configuration-toggle.active { background: var(--vscode-toolbar-hoverBackground); border-color: var(--vscode-focusBorder); }
 .configuration-toggle.pending { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--toggle-effort, #9b7cff) 65%, transparent); }
 /* The icon tint follows the active reasoning tier, mirroring the effort
@@ -1093,9 +1093,10 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .configuration-toggle[data-effort='high'] { --toggle-effort: #9b7cff; }
 .configuration-toggle[data-effort='max'] { --toggle-effort: #e8784f; }
 .configuration-toggle-copy { min-width: 0; display: block; line-height: 1.2; text-align: left; }
-/* strong/small are inline by default, where overflow + ellipsis never apply;
-   block boxes are what actually clip long model names inside the pill. */
-.configuration-toggle-copy strong, .configuration-toggle-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* strong/small are block boxes so the model name can size the pill; the name
+   shows in full at normal widths and only ellipsises in the narrow
+   breakpoints below. */
+.configuration-toggle-copy strong, .configuration-toggle-copy small { display: block; white-space: nowrap; }
 .configuration-toggle-copy strong { font-size: 11px; }
 .configuration-toggle-copy small { display: none; color: var(--vscode-descriptionForeground); font-size: 10px; }
 .configuration-toggle-chevron { color: var(--vscode-descriptionForeground); font-size: 9px; transition: transform 140ms ease; }
@@ -1187,7 +1188,6 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   .composer-meta { justify-content: flex-start; }
   .composer-status { text-align: left; }
   .permission-toggle { width: min(138px, 40vw); }
-  .configuration-toggle { max-width: 132px; }
 }
 
 @media (max-width: 360px) {
@@ -1207,6 +1207,7 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   .effort-heading { min-width: 0; padding-top: 0; }
   .effort-slider-row { width: 100%; }
   .configuration-toggle { width: auto; max-width: 130px; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .configuration-toggle-copy strong { overflow: hidden; text-overflow: ellipsis; }
   .configuration-toggle-icon { display: none; }
   #configuration-toggle-mode { display: none; }
 }
