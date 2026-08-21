@@ -36,7 +36,7 @@ export function createComposerConfigurationComponent(options: ComponentOptions):
 class ComposerConfigurationDom implements ComposerConfigurationComponent {
   private readonly store = new ComposerConfigurationStore()
   private effortDragging = false
-  /** '' collapses every provider; undefined follows the current selection. */
+  /** Provider tab shown in the model rail; defaults to the selection's. */
   private expandedProvider: string | undefined
   private readonly panel: HTMLElement
   private readonly toggle: HTMLButtonElement
@@ -292,54 +292,59 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
         for (const model of models) fragment.append(this.modelButton(snapshot, model))
       }
     } else {
-      // Multiple providers get their own collapsible level between the Models
-      // group and the model list, accordion-style (one open at a time).
+      // Multiple providers get a master-detail layout: provider tabs on the
+      // left rail, the open provider's models in a column on the right.
       const openProvider = this.expandedProvider ?? snapshot.selection.provider
+      const layout = this.options.document.createElement('div')
+      layout.className = 'configuration-provider-layout'
+      const rail = this.options.document.createElement('div')
+      rail.className = 'configuration-provider-rail'
+      const detail = this.options.document.createElement('div')
+      detail.className = 'configuration-provider-models'
       for (const [provider, models] of groups) {
-        fragment.append(this.providerGroup(snapshot, provider, models, provider === openProvider))
+        rail.append(this.providerTab(snapshot, provider, models, provider === openProvider))
+        if (provider === openProvider) {
+          for (const model of models) detail.append(this.modelButton(snapshot, model))
+        }
       }
+      layout.append(rail, detail)
+      fragment.append(layout)
     }
     this.models.replaceChildren(fragment)
   }
 
-  private providerGroup(
+  private providerTab(
     snapshot: ComposerConfigurationSnapshot,
     provider: string,
     models: readonly ModelConfigurationOption[],
-    expanded: boolean,
-  ): HTMLElement {
-    const document = this.options.document
-    const group = document.createElement('div')
-    group.className = `configuration-provider-group${expanded ? '' : ' collapsed'}`
-    const toggle = document.createElement('button')
-    toggle.type = 'button'
-    toggle.className = 'configuration-provider-toggle'
-    toggle.setAttribute('aria-expanded', String(expanded))
-    const chevron = document.createElement('span')
+    open: boolean,
+  ): HTMLButtonElement {
+    const tab = this.options.document.createElement('button')
+    tab.type = 'button'
+    tab.className = `configuration-provider-tab${open ? ' active' : ''}`
+    tab.setAttribute('aria-pressed', String(open))
+    const name = this.options.document.createElement('span')
+    name.className = 'configuration-provider-name'
+    name.textContent = models[0]?.providerName ?? provider
+    tab.append(name)
+    const selected = models.find((model) => model.provider === snapshot.selection.provider && model.id === snapshot.selection.model)
+    if (selected !== undefined && !open) {
+      const current = this.options.document.createElement('span')
+      current.className = 'configuration-provider-current'
+      current.textContent = selected.label
+      tab.append(current)
+    }
+    const chevron = this.options.document.createElement('span')
     chevron.className = 'configuration-provider-chevron'
     chevron.setAttribute('aria-hidden', 'true')
     chevron.textContent = '›'
-    const name = document.createElement('span')
-    name.textContent = models[0]?.providerName ?? provider
-    toggle.append(chevron, name)
-    const selected = models.find((model) => model.provider === snapshot.selection.provider && model.id === snapshot.selection.model)
-    if (selected !== undefined) {
-      const current = document.createElement('span')
-      current.className = 'configuration-provider-current'
-      current.textContent = selected.label
-      toggle.append(current)
-    }
-    toggle.addEventListener('click', () => {
-      // '' means every provider is collapsed; undefined falls back to the
-      // provider holding the current selection.
-      this.expandedProvider = expanded ? '' : provider
+    tab.append(chevron)
+    tab.addEventListener('click', () => {
+      if (open) return
+      this.expandedProvider = provider
       this.render(this.store.snapshot())
     })
-    const list = document.createElement('div')
-    list.className = 'configuration-provider-models'
-    for (const model of models) list.append(this.modelButton(snapshot, model))
-    group.append(toggle, list)
-    return group
+    return tab
   }
 
   private modelButton(snapshot: ComposerConfigurationSnapshot, model: ModelConfigurationOption): HTMLButtonElement {
