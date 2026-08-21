@@ -104,7 +104,6 @@ describe('DSH plugin catalog sources', () => {
     expect(contribution.source).toBe('builtin')
     expect(contribution.categories).toEqual([
       { id: 'routing', label: '路由与工作流' },
-      { id: 'vision', label: '视觉' },
       { id: 'import', label: '导入' },
     ])
     expect(contribution.plugins[0]).toMatchObject({
@@ -117,27 +116,17 @@ describe('DSH plugin catalog sources', () => {
     })
     expect(contribution.plugins.map((plugin) => plugin.name)).toEqual([
       'DSH Routing Suite',
-      'DSH Vision Router',
       'DSH Super Injector',
       'DSH Chat Import',
     ])
     expect(contribution.plugins[1]).toMatchObject({
-      name: 'DSH Vision Router',
-      installSpec: 'dsh-vision-router',
-      npmPackage: 'dsh-vision-router',
-      installedName: 'dsh-vision-router',
-      installKind: 'package',
-      catalogSource: 'builtin',
-      compatibility: 'agent',
-    })
-    expect(contribution.plugins[2]).toMatchObject({
       name: 'DSH Super Injector',
       installedName: '@dsh-external/dsh-super-injector',
       installKind: 'package',
       catalogSource: 'builtin',
       compatibility: 'agent',
     })
-    expect(contribution.plugins[3]).toMatchObject({
+    expect(contribution.plugins[2]).toMatchObject({
       name: 'DSH Chat Import',
       installSpec: 'dsh-chat-import',
       installedName: 'dsh-chat-import',
@@ -188,9 +177,8 @@ describe('DSH plugin catalog sources', () => {
     const service = new DshPluginCatalogService(workingSource, failingSource)
 
     const catalog = await service.load('en')
-    expect(catalog.plugins).toHaveLength(6)
+    expect(catalog.plugins).toHaveLength(5)
     expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Routing Suite')).toBe(true)
-    expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Vision Router')).toBe(true)
     expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Super Injector')).toBe(true)
     expect(catalog.plugins.some((plugin) => plugin.name === 'DSH Chat Import')).toBe(true)
     expect(catalog.topicRepositoryCount).toBe(3016)

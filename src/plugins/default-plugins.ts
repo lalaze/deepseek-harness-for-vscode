@@ -16,23 +16,6 @@ export interface DefaultBuiltinPlugin {
 
 export const DEFAULT_BUILTIN_PLUGINS: readonly DefaultBuiltinPlugin[] = [
   {
-    id: 'https://github.com/ysr666/dsh-vision-router',
-    name: 'DSH Vision Router',
-    owner: 'ysr666',
-    description: {
-      en: 'Eyes for text-only DeepSeek Harness agents: built-in free vision chain (no key) plus pixel-level vision tools for Q&A, grounding, crop, pixel diff, colors, OCR, SVG trace, cutout, and screenshots.',
-      zh: '为纯文本 DeepSeek Harness Agent 提供视觉能力：内置免费视觉链路（无需密钥）加像素级视觉工具，支持问答、定位、裁剪、像素对比、取色、OCR、SVG 矢量化、抠图与截图。',
-    },
-    category: 'vision',
-    categoryLabel: { en: 'Vision', zh: '视觉' },
-    repositoryUrl: 'https://github.com/ysr666/dsh-vision-router',
-    installSpec: 'dsh-vision-router',
-    installedName: 'dsh-vision-router',
-    npmPackage: 'dsh-vision-router',
-    updatedAt: '2026-08-14T00:00:00Z',
-    compatibility: 'agent',
-  },
-  {
     id: 'https://github.com/yjh051108/dsh-super-injector',
     name: 'DSH Super Injector',
     owner: 'yjh051108',
