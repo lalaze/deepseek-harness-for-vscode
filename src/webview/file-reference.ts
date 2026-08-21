@@ -37,6 +37,15 @@ export function findFileReferences(source: string): readonly LocatedFileReferenc
   })
 }
 
+/** Lowercase extension of a referenced path, used to pick a file-type icon. */
+export function fileExtension(path: string): string | undefined {
+  const basename = path.split(/[\\/]/u).pop() ?? ''
+  const dot = basename.lastIndexOf('.')
+  if (dot <= 0) return undefined
+  const extension = basename.slice(dot + 1).toLowerCase()
+  return /^[a-z0-9]{1,10}$/u.test(extension) ? extension : undefined
+}
+
 function result(path: string | undefined, line: string | undefined, column: string | undefined): FileReference | undefined {
   if (path === undefined || !looksLikeFile(path)) return undefined
   const parsedLine = positiveInteger(line)

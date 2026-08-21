@@ -17,6 +17,21 @@ export function rankWorkspaceFiles(
     .map((item) => item.file)
 }
 
+/**
+ * Matches a bare file name (no directory segments) against indexed basenames.
+ * Exact, case-sensitive matches only; ties break by shorter path, then
+ * lexicographic order so a repeated reference always opens the same file.
+ */
+export function matchBareFileName(
+  files: readonly WorkspaceFileView[],
+  name: string,
+): readonly WorkspaceFileView[] {
+  if (name === '' || name.includes('/') || name.includes('\\')) return []
+  return files
+    .filter((file) => file.label === name)
+    .sort((left, right) => left.path.length - right.path.length || left.path.localeCompare(right.path))
+}
+
 function scoreFile(file: WorkspaceFileView, query: string): number {
   if (query === '') return file.path.length
   const target = normalize(file.path)

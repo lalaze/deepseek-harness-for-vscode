@@ -1,6 +1,6 @@
 import DOMPurify, { type Config } from 'dompurify'
 import MarkdownIt from 'markdown-it'
-import { findFileReferences, parseFileReference, type FileReference } from './file-reference.js'
+import { fileExtension, findFileReferences, parseFileReference, type FileReference } from './file-reference.js'
 
 const markdown = new MarkdownIt({
   html: false,
@@ -109,6 +109,8 @@ function decoratePlainTextReferences(target: HTMLElement, actions: MarkdownActio
 function decorateFileLink(element: HTMLElement, reference: FileReference, actions: MarkdownActions): void {
   element.removeAttribute('href')
   element.classList.add('md-file-link')
+  const extension = fileExtension(reference.path)
+  if (extension !== undefined) element.dataset.fileExt = extension
   element.setAttribute('role', 'link')
   element.tabIndex = 0
   const open = (event: Event): void => {
