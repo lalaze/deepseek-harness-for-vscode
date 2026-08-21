@@ -189,10 +189,10 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
     const document = this.options.document
     const move = (event: PointerEvent) => {
       const rect = row.getBoundingClientRect()
-      if (rect.width <= 37) return
-      // Thumb centre travels from 18.5px to width - 18.5px (7px padding plus
-      // half of the 23px knob on each side).
-      const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - 18.5) / (rect.width - 37)))
+      if (rect.width <= 24) return
+      // Thumb centre travels from 12px to width - 12px (5px padding plus
+      // half of the 14px knob on each side).
+      const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - 12) / (rect.width - 24)))
       this.effortControl.style.setProperty('--effort-position', String(fraction))
       this.effortControl.style.setProperty('--effort-progress', `${fraction * 100}%`)
     }
