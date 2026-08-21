@@ -733,9 +733,9 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
   --effort-progress: 50%;
   --effort-position: .5;
   position: relative;
-  padding: 9px 11px 8px;
+  padding: 7px 11px 6px;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   border-top: 1px solid var(--vscode-widget-border);
   background: color-mix(in srgb, var(--vscode-editorWidget-background) 94%, var(--effort-color) 6%);
   transition: background-color 160ms ease;
@@ -744,35 +744,35 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .effort-control[data-effort='low'] { --effort-color: #3f9be0; }
 .effort-control[data-effort='high'] { --effort-color: #9b7cff; }
 .effort-control[data-effort='max'] { --effort-color: #e8784f; }
-.effort-main { min-height: 50px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.effort-heading { min-width: 82px; padding-top: 7px; display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.effort-main { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.effort-heading { min-width: 0; display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .effort-heading::before { content: '◫'; margin-right: 3px; color: var(--vscode-descriptionForeground); font-size: 16px; line-height: 1; }
 .effort-heading span { color: var(--vscode-foreground); font-size: 12px; font-weight: 600; }
 .effort-heading strong { color: var(--effort-color); font-size: 11px; font-weight: 500; transition: color 160ms ease; }
 .effort-heading strong::before { content: '('; }
 .effort-heading strong::after { content: ')'; }
-.effort-slider-row { width: min(160px, 54%); height: 50px; position: relative; flex: none; }
-#effort-slider { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 31px; margin: 0; padding: 0 7px; appearance: none; -webkit-appearance: none; background: linear-gradient(to right, color-mix(in srgb, var(--effort-color) 74%, var(--vscode-editorWidget-background)) 0 var(--effort-progress), color-mix(in srgb, var(--effort-color) 13%, var(--vscode-editorWidget-background)) var(--effort-progress) 100%); border: 1px solid color-mix(in srgb, var(--effort-color) 34%, var(--vscode-widget-border)); border-radius: 999px; cursor: grab; transition: --effort-progress 240ms cubic-bezier(.3, .9, .3, 1), background-color 160ms ease, border-color 160ms ease; }
+.effort-slider-row { width: min(112px, 48%); height: 26px; position: relative; flex: none; }
+#effort-slider { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 20px; margin: 0; padding: 0 5px; appearance: none; -webkit-appearance: none; background: linear-gradient(to right, color-mix(in srgb, var(--effort-color) 74%, var(--vscode-editorWidget-background)) 0 var(--effort-progress), color-mix(in srgb, var(--effort-color) 13%, var(--vscode-editorWidget-background)) var(--effort-progress) 100%); border: 1px solid color-mix(in srgb, var(--effort-color) 34%, var(--vscode-widget-border)); border-radius: 999px; cursor: grab; transition: --effort-progress 240ms cubic-bezier(.3, .9, .3, 1), background-color 160ms ease, border-color 160ms ease; }
 #effort-slider:active { cursor: grabbing; }
 #effort-slider:disabled { cursor: default; }
 /* The native thumb stays as an invisible hit target; the visible knob is the
    .effort-thumb overlay so it can glide between detents via a CSS transition. */
 #effort-slider::-webkit-slider-runnable-track { height: 4px; background: transparent; border-radius: 999px; }
-#effort-slider::-webkit-slider-thumb { width: 23px; height: 23px; margin-top: -10px; appearance: none; -webkit-appearance: none; opacity: 0; cursor: grab; }
+#effort-slider::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; appearance: none; -webkit-appearance: none; opacity: 0; cursor: grab; }
 #effort-slider:active::-webkit-slider-thumb { cursor: grabbing; }
 #effort-slider::-moz-range-track { height: 4px; background: transparent; border-radius: 999px; }
 #effort-slider::-moz-range-progress { height: 4px; background: transparent; border-radius: 999px; }
-#effort-slider::-moz-range-thumb { width: 23px; height: 23px; opacity: 0; background: transparent; border: 0; cursor: grab; }
-.effort-thumb { position: absolute; top: 4px; left: calc(7px + (100% - 37px) * var(--effort-position)); z-index: 4; box-sizing: border-box; width: 23px; height: 23px; pointer-events: none; background: #fff; border: 3px solid color-mix(in srgb, var(--effort-color) 88%, #fff); border-radius: 50%; box-shadow: 0 1px 5px color-mix(in srgb, #000 42%, transparent); transition: left 240ms cubic-bezier(.3, .9, .3, 1), border-color 160ms ease, transform 120ms ease; }
+#effort-slider::-moz-range-thumb { width: 14px; height: 14px; opacity: 0; background: transparent; border: 0; cursor: grab; }
+.effort-thumb { position: absolute; top: 3px; left: calc(5px + (100% - 24px) * var(--effort-position)); z-index: 4; box-sizing: border-box; width: 14px; height: 14px; pointer-events: none; background: #fff; border: 2px solid color-mix(in srgb, var(--effort-color) 88%, #fff); border-radius: 50%; box-shadow: 0 1px 5px color-mix(in srgb, #000 42%, transparent); transition: left 240ms cubic-bezier(.3, .9, .3, 1), border-color 160ms ease, transform 120ms ease; }
 .effort-slider-row:hover .effort-thumb { transform: scale(1.08); }
 .effort-slider-row:active .effort-thumb { transform: scale(1.14); }
 /* While dragging, the pointer owns the knob/fill position, so the settle
    transitions must not lag behind it. */
 .effort-control.dragging .effort-thumb { transition: border-color 160ms ease, transform 120ms ease; }
 .effort-control.dragging #effort-slider { transition: background-color 160ms ease, border-color 160ms ease; }
-.effort-ticks { position: absolute; top: 0; left: 11px; right: 11px; z-index: 3; height: 50px; pointer-events: none; }
-.effort-tick { position: absolute; left: var(--effort-stop); bottom: 0; min-width: 34px; height: 18px; padding: 0 3px; transform: translateX(-50%); pointer-events: auto; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 6px; font-size: 10px; line-height: 18px; }
-.effort-tick::before { content: ''; position: absolute; top: -19px; left: 50%; width: 6px; height: 6px; transform: translateX(-50%); background: color-mix(in srgb, var(--vscode-descriptionForeground) 48%, transparent); border-radius: 50%; }
+.effort-ticks { position: absolute; top: 0; left: 12px; right: 12px; z-index: 3; height: 20px; pointer-events: none; }
+.effort-tick { position: absolute; left: var(--effort-stop); top: 0; width: 10px; height: 20px; padding: 0; transform: translateX(-50%); pointer-events: auto; color: var(--vscode-descriptionForeground); background: transparent; border: 0; border-radius: 6px; font-size: 0; }
+.effort-tick::before { content: ''; position: absolute; top: 7px; left: 50%; width: 6px; height: 6px; transform: translateX(-50%); background: color-mix(in srgb, var(--vscode-descriptionForeground) 48%, transparent); border-radius: 50%; }
 .effort-tick.active { color: var(--effort-color); }
 /* Passed dots ride on the filled portion of the track, so they flip to white
    to stay visible against the effort colour. */
