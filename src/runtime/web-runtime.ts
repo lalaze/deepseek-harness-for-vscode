@@ -5,6 +5,7 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import type { ConfigurationService, HarnessConfiguration } from '../config/configuration.js'
 import type { BundledRuntimeResolver } from './bundled-runtime.js'
+import { pruneShadowedRuntimePackages } from './profile-scope-prune.js'
 import { renderOverlay } from './runtime-overlay.js'
 
 const START_TIMEOUT_MS = 90_000
@@ -91,6 +92,14 @@ export class HarnessHostRuntime implements vscode.Disposable {
     const gatewayPlugin = path.join(this.context.extensionUri.fsPath, 'dist', 'runtime', 'gateway-runtime.mjs')
     await mkdir(home, { recursive: true })
     await writeFile(overlay, renderOverlay(configuration, gatewayPlugin), 'utf8')
+    // Profile-level @deepseek-ai copies shadow the bundled runtime during
+    // plugin resolution; drop stale ones so an older build's leftovers cannot
+    // fail the boot with a stale-schema validation error.
+    await pruneShadowedRuntimePackages(
+      path.join(home, 'profiles', 'web', 'node_modules', '@deepseek-ai'),
+      this.context.asAbsolutePath(path.join('node_modules', '@deepseek-ai')),
+      (line) => this.output.appendLine(line),
+    )
 
     const args = [...launch.args, 'web', '--patch', overlay, '--host', '127.0.0.1', '--port', '0']
     const env: NodeJS.ProcessEnv = {
