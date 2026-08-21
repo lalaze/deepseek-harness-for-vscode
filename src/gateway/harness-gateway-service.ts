@@ -273,6 +273,53 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   /**
+   * Opens the "new session" a DSH-mode switch produces by forking the current
+   * one, so the previous context is carried over instead of lost.
+   *
+   * Harness locks a session's Agent Preset once it has a conversation and
+   * cannot seed a fresh session from another transcript, so the fork inherits
+   * the source preset; the requested preset is only applied when the fork is
+   * still blank (source had no completed turn). The effective preset is
+   * reported so the composer stays consistent with the session that opened.
+   */
+  private async forkCarryingPreset(requestedPreset: string): Promise<string> {
+    const sourceId = this.requireActiveSession()
+    try {
+      const forked = valueOf(await this.requireClient().sessions.fork({
+        sessionId: sourceId as SessionId,
+      }))
+      await this.refreshSessionList()
+      await this.selectSession(String(forked.sessionId))
+      const summary = this.summaries.get(String(forked.sessionId))
+      if (summary?.blank === true) {
+        await this.selectPreset(requestedPreset)
+      } else {
+        // The fork already has a conversation, so its preset is fixed to the
+        // source's. Keep the configuration aligned with what actually opened.
+        const effectivePreset = summary?.agentPreset ?? this.configuration.get().agentPreset
+        await this.configuration.setAgentPresetIfKnown(effectivePreset)
+        this.output.appendLine(vscode.l10n.t(
+          '[gateway] DSH mode is fixed once a conversation starts; the forked session keeps preset "{0}" and carries the previous context.',
+          effectivePreset,
+        ))
+        void vscode.window.showInformationMessage(vscode.l10n.t(
+          'DeepSeek Harness: DSH mode is fixed once a conversation starts, so the new session carries your context under preset "{0}".',
+          effectivePreset,
+        ))
+      }
+      return String(forked.sessionId)
+    } catch (cause) {
+      // No completed turn to fork from (or the fork failed): fall back to the
+      // previous behavior so switching DSH mode still opens a session.
+      this.output.appendLine(vscode.l10n.t(
+        '[gateway] Could not fork the session to carry context ({0}); opening a fresh session instead.',
+        errorMessage(cause),
+      ))
+      return await this.createSession(requestedPreset)
+    }
+  }
+
+  /**
    * Commits composer choices immediately before the next prompt. Harness locks
    * an Agent Preset after a conversation starts, so changing DSH mode creates a
    * fresh session while model/reasoning changes remain session-local.
@@ -291,7 +338,14 @@ export class HarnessGatewayService implements vscode.Disposable {
       if (transition === 'select-blank-session') {
         await this.selectPreset(selection.agentPreset)
       } else if (transition === 'create-session') {
-        sessionId = await this.createSession(selection.agentPreset)
+        // Harness fixes a session's Agent Preset once it has a conversation,
+        // and it cannot seed a new session from another transcript
+        // (session.create has no seed; session.fork inherits the source
+        // preset). Fork the current session so the new session carries the
+        // full previous context, then attempt the requested preset on the
+        // fork — the runtime keeps the source preset for a conversation that
+        // has already started.
+        sessionId = await this.forkCarryingPreset(selection.agentPreset)
       } else {
         await this.configuration.setAgentPresetIfKnown(selection.agentPreset)
       }
