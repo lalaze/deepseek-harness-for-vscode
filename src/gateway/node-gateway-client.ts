@@ -61,7 +61,10 @@ export class NodeGatewayClient extends AbstractApiClient {
   /** Executes one registered Host slash command without sending it to the LLM. */
   async executeCommand(sessionId: string, line: string): Promise<HostCommandExecution | undefined> {
     return this.callUnaryRaw<HostCommandExecution | undefined>('commands/execute', {
-      args: { agentId: sessionId, line },
+      // The typert descriptor declares `images` as a required strict field
+      // since dsh 0.1.1; host commands carry no attachments, so send an
+      // explicit empty list instead of omitting it.
+      args: { agentId: sessionId, line, images: [] },
     })
   }
 
