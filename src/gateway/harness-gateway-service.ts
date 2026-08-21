@@ -27,6 +27,13 @@ import type { PromptAttachment } from '../domain/prompt-context.js'
 import { agentPresetTransition, type PromptConfiguration } from '../domain/prompt-configuration.js'
 import { projectSessionChanges } from '../domain/session-changes.js'
 import {
+  RESTORED_ARCHIVE_STATE_KEY,
+  isEffectivelyArchived,
+  partitionSessionLists,
+  pruneRestoredArchiveIds,
+  readRestoredArchiveIds,
+} from '../domain/archived-sessions.js'
+import {
   projectConversation,
   projectionCommands,
   projectionGoal,
@@ -88,6 +95,8 @@ export class HarnessGatewayService implements vscode.Disposable {
   private error: string | undefined
   private publishScheduled = false
   private selectionGeneration = 0
+  private archivedIds = new Set<string>()
+  private restoredIds = new Set<string>()
 
   readonly onDidChange = this.changeEmitter.event
 
@@ -96,7 +105,9 @@ export class HarnessGatewayService implements vscode.Disposable {
     private readonly configuration: ConfigurationService,
     private readonly connectionSettings: ConnectionSettingsService,
     private readonly output: vscode.OutputChannel,
+    private readonly globalState: vscode.Memento,
   ) {
+    this.restoredIds = new Set(readRestoredArchiveIds(globalState.get(RESTORED_ARCHIVE_STATE_KEY)))
     this.runtimeSubscription = runtime.onDidChangeState((state) => {
       if (state.phase === 'error') {
         this.phase = 'error'
@@ -140,11 +151,11 @@ export class HarnessGatewayService implements vscode.Disposable {
       valueOf(await this.client.host.describe({}))
       await this.connectionSettings.connect(this.client)
       this.startEventStreams()
-      await Promise.all([this.refreshSessionList(), this.refreshPresets()])
+      await Promise.all([this.refreshSessionList(), this.refreshArchiveSet(), this.refreshPresets()])
       const requested = this.activeSessionId
-      const next = requested !== undefined && this.summaries.has(requested)
+      const next = requested !== undefined && this.summaries.has(requested) && !this.isArchived(requested)
         ? requested
-        : this.orderedSummaries()[0]?.sessionId
+        : this.visibleSummaries()[0]?.sessionId
       if (next !== undefined) {
         try {
           await this.openSession(String(next))
@@ -182,7 +193,11 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   async snapshot(): Promise<HarnessWorkbenchState> {
     const hasApiKey = this.connectionSettings.hasConfiguredProvider()
-    const summaries = this.orderedSummaries().map((summary) => sessionListItem(summary, this.labels))
+    const partitioned = partitionSessionLists(
+      this.orderedSummaries().map((summary) => sessionListItem(summary, this.labels)),
+      this.archivedIds,
+      this.restoredIds,
+    )
     const activeSummary = this.activeSessionId === undefined ? undefined : this.summaries.get(this.activeSessionId)
     const projected = projectConversation(this.entries, this.labels)
     const permissions = projectionPermissions(this.projections.permissions)
@@ -232,7 +247,8 @@ export class HarnessGatewayService implements vscode.Disposable {
       phase: this.phase,
       ...(this.error === undefined ? {} : { error: this.error }),
       hasApiKey,
-      sessions: summaries,
+      sessions: partitioned.active,
+      archivedSessions: partitioned.archived,
       ...(active === undefined ? {} : { active }),
       presets: this.presets,
     }
@@ -691,6 +707,39 @@ export class HarnessGatewayService implements vscode.Disposable {
     }
   }
 
+  /**
+   * Hides one history row from grouping surfaces via the official Harness
+   * archive set. Only rows the history list actually shows can be archived.
+   */
+  async archiveSession(id: string): Promise<void> {
+    const summary = this.summaries.get(id)
+    if (summary === undefined || (summary.blank === true && !this.isArchived(id))) return
+    const wasRestored = this.restoredIds.delete(id)
+    try {
+      const archived = valueOf(await this.requireClient().workspace.archiveSession({
+        sessionId: id as SessionId,
+      })).archivedSessionIds
+      this.installArchivedIds(archived.map(String))
+    } catch (cause) {
+      if (wasRestored) this.restoredIds.add(id)
+      throw cause
+    }
+    await this.persistRestoredIds()
+    this.fireChange()
+    if (this.activeSessionId === id && this.isArchived(id)) await this.leaveArchivedSelection()
+  }
+
+  /**
+   * Brings a Harness-archived session back to this workbench's default list.
+   * rc.7 has no unarchive RPC, so restore is a durable overlay on the official set.
+   */
+  async restoreSession(sessionId: string): Promise<void> {
+    if (!this.archivedIds.has(sessionId)) return
+    this.restoredIds.add(sessionId)
+    await this.persistRestoredIds()
+    this.fireChange()
+  }
+
   /** Downloads the current session's log ZIP (with descendants) for saving. */
   async exportSession(sessionId?: string, includeDescendants = true): Promise<Uint8Array> {
     const client = this.requireClient()
@@ -824,6 +873,8 @@ export class HarnessGatewayService implements vscode.Disposable {
       void this.refreshSessionList()
     } else if (frame.type === 'host/session-removed') {
       this.summaries.delete(String(frame.sessionId))
+    } else if (frame.type === 'host/archived-sessions-changed') {
+      this.installArchivedIds(frame.archivedSessionIds.map(String))
     } else if (frame.type === 'host/session-status') {
       const id = String(frame.sessionId)
       const summary = this.summaries.get(id)
@@ -880,6 +931,50 @@ export class HarnessGatewayService implements vscode.Disposable {
     const items = valueOf(await this.requireClient().sessions.list({})).items
     this.summaries = new Map(items.map((summary) => [String(summary.sessionId), summary]))
     this.fireChange()
+  }
+
+  private async refreshArchiveSet(): Promise<void> {
+    try {
+      const archived = valueOf(await this.requireClient().workspace.list({})).archivedSessionIds
+      this.installArchivedIds(archived.map(String))
+    } catch (cause) {
+      // Keep the previous set: a transient failure should not unhide archived sessions.
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the archived session set: {0}', errorMessage(cause)))
+    }
+    this.fireChange()
+  }
+
+  private installArchivedIds(ids: readonly string[]): void {
+    this.archivedIds = new Set(ids)
+    const pruned = pruneRestoredArchiveIds(this.archivedIds, this.restoredIds)
+    if (pruned.size === this.restoredIds.size) return
+    this.restoredIds = new Set(pruned)
+    void this.persistRestoredIds()
+  }
+
+  private async persistRestoredIds(): Promise<void> {
+    try {
+      await this.globalState.update(RESTORED_ARCHIVE_STATE_KEY, [...this.restoredIds])
+    } catch (cause) {
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to save the restored session list: {0}', errorMessage(cause)))
+    }
+  }
+
+  private isArchived(sessionId: string): boolean {
+    return isEffectivelyArchived(sessionId, this.archivedIds, this.restoredIds)
+  }
+
+  private visibleSummaries(): SessionSummary[] {
+    return this.orderedSummaries().filter((summary) => !this.isArchived(String(summary.sessionId)))
+  }
+
+  private async leaveArchivedSelection(): Promise<void> {
+    const next = this.visibleSummaries()[0]
+    if (next !== undefined) {
+      await this.selectSession(String(next.sessionId))
+      return
+    }
+    await this.createSession()
   }
 
   private async refreshPresets(): Promise<void> {
