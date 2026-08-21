@@ -5,6 +5,7 @@ import { createEditorContextComponent } from '../editor-context/component.js'
 import { createFileMentionComponent } from '../file-mention/component.js'
 import { renderMarkdown } from '../markdown.js'
 import { createPluginCenterComponent } from '../plugin-center/component.js'
+import { createSessionChangesComponent } from '../session-changes/component.js'
 import { StreamingMessageComponent } from '../streaming-message/component.js'
 import { createWorkDurationComponent } from '../work-duration/component.js'
 import { formatWorkDuration } from '../work-duration/format.js'
@@ -57,6 +58,12 @@ components.fileMention = createFileMentionComponent({
 })
 
 components.workDuration = createWorkDurationComponent({ document, translate: t })
+
+components.sessionChanges = createSessionChangesComponent({
+  document,
+  translate: t,
+  onOpenFile: (path) => post('openFile', { path }),
+})
 
 components.streamingMessage = new StreamingMessageComponent({
   document,

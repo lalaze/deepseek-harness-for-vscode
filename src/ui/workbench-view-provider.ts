@@ -587,6 +587,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         <div id="file-mention-menu" class="file-mention-menu hidden" role="listbox" aria-label="${text('workspaceFiles')}"></div>
         <div id="command-menu" class="command-menu hidden" role="listbox" aria-label="${text('slashCommands')}"></div>
         <div id="queued-panel" class="queued-panel hidden" aria-label="${text('queuedMessages')}"></div>
+        <div id="changes-bar" class="changes-bar hidden" aria-label="${text('sessionChanges')}"></div>
         <textarea id="prompt" rows="1" placeholder="${text('promptPlaceholder')}" aria-label="${text('message')}"></textarea>
         <div class="composer-bar">
           <div class="composer-tools">

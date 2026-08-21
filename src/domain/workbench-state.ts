@@ -8,6 +8,7 @@ import type {
 import type { HistoryEntry } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type {} from '@deepseek-ai/dsh-commands/types'
 import type { ContextPressureView } from './context-pressure.js'
+import type { SessionChangesView } from './session-changes.js'
 import { projectTurnDurations, type TurnDurationView } from './turn-duration.js'
 
 export type ConnectionPhase = 'idle' | 'starting' | 'connected' | 'reconnecting' | 'error'
@@ -112,6 +113,7 @@ export interface ActiveSessionView {
   readonly goal?: GoalView
   readonly tokenUsage?: TokenUsageView
   readonly contextPressure?: ContextPressureView
+  readonly changes?: SessionChangesView
 }
 
 /**
