@@ -66,6 +66,8 @@
   "DSH plugin removed: {0}": "DSH 插件已移除：{0}",
   "Faster responses for everyday coding and rapid iteration.": "响应更快，适合日常编码与快速迭代。",
   "DeepSeek V4 Flash": "DeepSeek V4 Flash",
+  "DeepSeek V4 Flash Vision (Exp)": "DeepSeek V4 Flash Vision (Exp)",
+  "Image understanding: describe pictures, read screenshots, and analyse charts.": "支持图像理解：描述图片、识别截图文字、分析图表。",
   "DeepSeek V4 Pro": "DeepSeek V4 Pro",
   "Stronger capabilities for complex tasks and long reasoning chains.": "能力更强，适合复杂任务与长链路推理。",
   "Off": "关闭推理",

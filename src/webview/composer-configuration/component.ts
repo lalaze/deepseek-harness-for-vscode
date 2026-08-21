@@ -36,6 +36,8 @@ export function createComposerConfigurationComponent(options: ComponentOptions):
 class ComposerConfigurationDom implements ComposerConfigurationComponent {
   private readonly store = new ComposerConfigurationStore()
   private effortDragging = false
+  /** '' collapses every provider; undefined follows the current selection. */
+  private expandedProvider: string | undefined
   private readonly panel: HTMLElement
   private readonly toggle: HTMLButtonElement
   private readonly toggleModel: HTMLElement
@@ -284,22 +286,70 @@ class ComposerConfigurationDom implements ComposerConfigurationComponent {
       if (list === undefined) groups.set(model.provider, [model])
       else list.push(model)
     }
-    for (const [provider, models] of groups) {
-      const header = this.options.document.createElement('div')
-      header.className = 'configuration-model-group-header'
-      header.textContent = models[0]?.providerName ?? provider
-      fragment.append(header)
-      for (const model of models) {
-        const active = model.provider === snapshot.selection.provider && model.id === snapshot.selection.model
-        const button = this.optionButton(model, modelIcon(model.id), active, model.providerName)
-        button.addEventListener('click', () => {
-          this.render(this.store.selectModel(model.provider, model.id))
-          this.options.onChange()
-        })
-        fragment.append(button)
+    if (groups.size <= 1) {
+      // A single provider needs no extra level: list its models directly.
+      for (const models of groups.values()) {
+        for (const model of models) fragment.append(this.modelButton(snapshot, model))
+      }
+    } else {
+      // Multiple providers get their own collapsible level between the Models
+      // group and the model list, accordion-style (one open at a time).
+      const openProvider = this.expandedProvider ?? snapshot.selection.provider
+      for (const [provider, models] of groups) {
+        fragment.append(this.providerGroup(snapshot, provider, models, provider === openProvider))
       }
     }
     this.models.replaceChildren(fragment)
+  }
+
+  private providerGroup(
+    snapshot: ComposerConfigurationSnapshot,
+    provider: string,
+    models: readonly ModelConfigurationOption[],
+    expanded: boolean,
+  ): HTMLElement {
+    const document = this.options.document
+    const group = document.createElement('div')
+    group.className = `configuration-provider-group${expanded ? '' : ' collapsed'}`
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    toggle.className = 'configuration-provider-toggle'
+    toggle.setAttribute('aria-expanded', String(expanded))
+    const chevron = document.createElement('span')
+    chevron.className = 'configuration-provider-chevron'
+    chevron.setAttribute('aria-hidden', 'true')
+    chevron.textContent = '›'
+    const name = document.createElement('span')
+    name.textContent = models[0]?.providerName ?? provider
+    toggle.append(chevron, name)
+    const selected = models.find((model) => model.provider === snapshot.selection.provider && model.id === snapshot.selection.model)
+    if (selected !== undefined) {
+      const current = document.createElement('span')
+      current.className = 'configuration-provider-current'
+      current.textContent = selected.label
+      toggle.append(current)
+    }
+    toggle.addEventListener('click', () => {
+      // '' means every provider is collapsed; undefined falls back to the
+      // provider holding the current selection.
+      this.expandedProvider = expanded ? '' : provider
+      this.render(this.store.snapshot())
+    })
+    const list = document.createElement('div')
+    list.className = 'configuration-provider-models'
+    for (const model of models) list.append(this.modelButton(snapshot, model))
+    group.append(toggle, list)
+    return group
+  }
+
+  private modelButton(snapshot: ComposerConfigurationSnapshot, model: ModelConfigurationOption): HTMLButtonElement {
+    const active = model.provider === snapshot.selection.provider && model.id === snapshot.selection.model
+    const button = this.optionButton(model, modelIcon(model.id), active, model.providerName)
+    button.addEventListener('click', () => {
+      this.render(this.store.selectModel(model.provider, model.id))
+      this.options.onChange()
+    })
+    return button
   }
 
   private renderPresets(snapshot: ComposerConfigurationSnapshot): void {

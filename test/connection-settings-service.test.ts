@@ -87,6 +87,7 @@ describe('ConnectionSettingsService', () => {
     expect(harness.document.piAi.value.providers['plain-relay']!.models).toEqual([
       { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
       { id: 'deepseek-v4-pro', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
+      { id: 'deepseek-v4-flash-vision-exp', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
     ])
   })
 
