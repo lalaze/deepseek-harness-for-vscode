@@ -7,10 +7,10 @@ const packageJsonPath = require.resolve('@deepseek-ai/dsh-llm-pi-ai/package.json
 const packageRoot = dirname(packageJsonPath)
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
 
-if (packageJson.version !== '0.1.0-rc.7') {
+if (packageJson.version !== '0.1.1-rc.1') {
   throw new Error(
     `Unsupported @deepseek-ai/dsh-llm-pi-ai version ${packageJson.version}; `
-      + 'review whether the supportsDeveloperRole compatibility patch is still required.',
+      + 'review whether the tool replay and connection probing patches are still required.',
   )
 }
 
@@ -37,61 +37,10 @@ async function patchFile(relativePath, replacements) {
 
 const runtimeChanged = await patchFile('lib/index.js', [
   {
-    label: 'model compat resolution',
-    before: `\tconst thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat;
-\tconst supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort;
-\tif (thinkingFormat === void 0 && supportsReasoningEffort === void 0) return {};
-\tif (api !== "openai-completions") {
-\t\tif (entry.compat?.thinkingFormat !== void 0 || entry.compat?.supportsReasoningEffort !== void 0) invalid(provider, \`model "\${entry.id}" sets compat reasoning switches, but its api is "\${api}"; thinkingFormat and supportsReasoningEffort exist only on openai-completions\`);
-\t\treturn {};
-\t}
-\treturn { compat: {
-\t\t...base?.api === api ? base.compat : void 0,
-\t\t...thinkingFormat === void 0 ? {} : { thinkingFormat },
-\t\t...supportsReasoningEffort === void 0 ? {} : { supportsReasoningEffort }
-\t} };`,
-    after: `\tconst thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat;
-\tconst supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort;
-\tconst supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole;
-\tif (thinkingFormat === void 0 && supportsReasoningEffort === void 0 && supportsDeveloperRole === void 0) return {};
-\tif (api !== "openai-completions") {
-\t\tif (entry.compat?.thinkingFormat !== void 0 || entry.compat?.supportsReasoningEffort !== void 0 || entry.compat?.supportsDeveloperRole !== void 0) invalid(provider, \`model "\${entry.id}" sets OpenAI Completions compat switches, but its api is "\${api}"; thinkingFormat, supportsReasoningEffort and supportsDeveloperRole exist only on openai-completions\`);
-\t\treturn {};
-\t}
-\treturn { compat: {
-\t\t...base?.api === api ? base.compat : void 0,
-\t\t...thinkingFormat === void 0 ? {} : { thinkingFormat },
-\t\t...supportsReasoningEffort === void 0 ? {} : { supportsReasoningEffort },
-\t\t...supportsDeveloperRole === void 0 ? {} : { supportsDeveloperRole }
-\t} };`,
-  },
-  {
-    label: 'route compat detection',
-    before: '\tconst routeCompatDefined = request.compat?.thinkingFormat !== void 0 || request.compat?.supportsReasoningEffort !== void 0;',
-    after: '\tconst routeCompatDefined = request.compat?.thinkingFormat !== void 0 || request.compat?.supportsReasoningEffort !== void 0 || request.compat?.supportsDeveloperRole !== void 0;',
-  },
-  {
-    label: 'route compat validation message',
-    before: '\tif (routeCompatDefined && !models.some((model) => model.api === "openai-completions")) invalid(provider, "sets compat reasoning switches, but no model on the route speaks openai-completions; thinkingFormat and supportsReasoningEffort exist only on that protocol");',
-    after: '\tif (routeCompatDefined && !models.some((model) => model.api === "openai-completions")) invalid(provider, "sets OpenAI Completions compat switches, but no model on the route speaks openai-completions; thinkingFormat, supportsReasoningEffort and supportsDeveloperRole exist only on that protocol");',
-  },
-  {
-    label: 'runtime config schema',
-    before: `const compatProfile = z.object({
-\tthinkingFormat: z.union(SUPPORTED_THINKING_FORMATS),
-\tsupportsReasoningEffort: z.boolean()
-});`,
-    after: `const compatProfile = z.object({
-\tthinkingFormat: z.union(SUPPORTED_THINKING_FORMATS),
-\tsupportsReasoningEffort: z.boolean(),
-\tsupportsDeveloperRole: z.boolean()
-});`,
-  },
-  {
     label: 'cross-provider DeepSeek tool replay',
-    before: `\t\t\t\tconst context = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade);
+    before: `\t\t\t\tconst context = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade, profile.maxRequestImageBytes);
 \t\t\t\tconst iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {`,
-    after: `\t\t\t\tconst rawContext = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade);
+    after: `\t\t\t\tconst rawContext = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade, profile.maxRequestImageBytes);
 \t\t\t\t// DeepSeek-compatible relays require reasoning_content to be replayed on
 \t\t\t\t// every assistant tool call. pi-ai normally strips thinking signatures
 \t\t\t\t// when provider ids differ, so normalize only those tool-call messages
@@ -123,20 +72,6 @@ const runtimeChanged = await patchFile('lib/index.js', [
   },
 ])
 
-const typesChanged = await patchFile('lib/types/catalog.d.ts', [
-  {
-    label: 'compatibility profile type',
-    before: `    /** Whether the endpoint accepts \`reasoning_effort\`; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
-    supportsReasoningEffort?: boolean;
-}`,
-    after: `    /** Whether the endpoint accepts \`reasoning_effort\`; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
-    supportsReasoningEffort?: boolean;
-    /** Whether reasoning models accept the OpenAI \`developer\` role instead of \`system\`. */
-    supportsDeveloperRole?: boolean;
-}`,
-  },
-])
-
-if (runtimeChanged || typesChanged) {
-  process.stdout.write('Patched @deepseek-ai/dsh-llm-pi-ai compatibility and connection probing.\n')
+if (runtimeChanged) {
+  process.stdout.write('Patched @deepseek-ai/dsh-llm-pi-ai tool replay and connection probing.\n')
 }
