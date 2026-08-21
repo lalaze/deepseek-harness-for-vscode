@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
+- 内置运行时升级为官方 `@deepseek-ai/dsh@0.1.1-rc.1`：纳入 rc.8 对自定义 OpenAI 兼容网关的修复（请求格式差异、推理内容回传缺失），上下文占用环与 token 实时统计在中转网关下恢复；`dsh-llm-pi-ai` 兼容补丁重定，`supportsDeveloperRole` 已由上游原生收录。
 - 新增会话导入：历史面板与标题栏可导入 DSH 官方会话 ZIP、ChatGPT 导出 ZIP、JSONL/文件夹，以及本机 Claude Code / Codex / Cursor 等 Agent 会话。
 - 首次启动会补装 `dsh-chat-import`（默认插件种子升至 v2）；导入后刷新会话列表并打开新导入的会话。
+- 权限安全门：选择 Full Access 时弹出确认对话框（Codex 与官方 Web UI 同款），取消、Esc 或点击外部均不生效。
+- 模型显示：右下角模型名完整显示不再省略号截断，图标颜色跟随当前推理档位（off / low / high / max 同色板）。
+- 输入区对齐：权限选择器宽度自适应内容、⌄ 紧贴档位名；两行布局下 token 统计、上下文环与压缩按钮归拢左侧。
+- 推理滑块：特效文字改为档位名（LOW / HIGH / MAX，大写音游判定风）；拖动时旋钮与填充实时跟随手指，松手平滑吸附档位。
 
 ## 0.4.9
 
