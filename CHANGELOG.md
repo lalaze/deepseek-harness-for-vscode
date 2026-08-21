@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- 内置运行时升级为官方 `@deepseek-ai/dsh@0.1.1-rc.2`：恢复 `prepareCall` 链路的 `contextWindow` 供给（上下文占用环数据更可靠）；纯文本模型收到图片时降级为文本占位而非报错。`dsh-llm-pi-ai` 补丁脚本同时兼容 rc.1 与 rc.2 两种源码形态。
+- 修复所有主机斜杠命令（/permission、/model、/compact 等）报错 `missing "images"` 的问题：`commands/execute` 的 typert 描述符自 dsh 0.1.1 起要求显式携带 images 字段，现按描述符发送空列表。
+
 ## 0.5.1
 
 - 修复 0.5.0 在部分机器上无法启动的问题：旧版本扩展遗留在 Harness Profile 里的过期 @deepseek-ai 运行时包（如 rc.6 时代的 dsh-llm-deepseek，不认识 low 推理档）会遮蔽 VSIX 内置运行时，导致 Gateway 启动崩溃（`reasoningEffort expected "off" | "high" | "max" but got "low"`）。启动前现在会自动清理版本不匹配的遗留包，受影响用户重新加载窗口即可自愈。
