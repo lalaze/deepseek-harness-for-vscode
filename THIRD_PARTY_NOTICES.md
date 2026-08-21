@@ -2,7 +2,7 @@
 
 This platform extension bundle contains:
 
-- `@deepseek-ai/dsh` 0.1.0-rc.7 and its `@deepseek-ai/dsh-*` dependencies
+- `@deepseek-ai/dsh` 0.1.1-rc.1 and its `@deepseek-ai/dsh-*` dependencies
   - Copyright: DeepSeek contributors
   - License: MIT
   - Source: https://github.com/deepseek-ai/deepseek-harness
