@@ -7,7 +7,9 @@ const packageJsonPath = require.resolve('@deepseek-ai/dsh-llm-pi-ai/package.json
 const packageRoot = dirname(packageJsonPath)
 const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
 
-if (packageJson.version !== '0.1.1-rc.1') {
+const SUPPORTED_VERSIONS = ['0.1.1-rc.1', '0.1.1-rc.2']
+
+if (!SUPPORTED_VERSIONS.includes(packageJson.version)) {
   throw new Error(
     `Unsupported @deepseek-ai/dsh-llm-pi-ai version ${packageJson.version}; `
       + 'review whether the tool replay and connection probing patches are still required.',
@@ -19,15 +21,16 @@ async function patchFile(relativePath, replacements) {
   let source = await readFile(path, 'utf8')
   let changed = false
 
-  for (const { before, after, label } of replacements) {
-    if (source.includes(after)) continue
-    const occurrences = source.split(before).length - 1
-    if (occurrences !== 1) {
+  for (const { candidates, label } of replacements) {
+    if (candidates.some(({ after }) => source.includes(after))) continue
+    const matches = candidates.filter(({ before }) => source.split(before).length - 1 === 1)
+    if (matches.length !== 1) {
       throw new Error(
-        `Cannot apply ${label} to ${relativePath}: expected one matching source block, found ${occurrences}.`,
+        `Cannot apply ${label} to ${relativePath}: expected one matching source block across `
+          + `${candidates.length} candidate(s), found ${matches.length}.`,
       )
     }
-    source = source.replace(before, after)
+    source = source.replace(matches[0].before, matches[0].after)
     changed = true
   }
 
@@ -35,12 +38,11 @@ async function patchFile(relativePath, replacements) {
   return changed
 }
 
-const runtimeChanged = await patchFile('lib/index.js', [
-  {
-    label: 'cross-provider DeepSeek tool replay',
-    before: `\t\t\t\tconst context = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade, profile.maxRequestImageBytes);
-\t\t\t\tconst iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {`,
-    after: `\t\t\t\tconst rawContext = attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade, profile.maxRequestImageBytes);
+// DeepSeek-compatible relays require reasoning_content to be replayed on
+// every assistant tool call. pi-ai normally strips thinking signatures when
+// provider ids differ, so normalize only those tool-call messages to the
+// current DeepSeek wire identity before dispatch.
+const toolReplayNormalization = `
 \t\t\t\t// DeepSeek-compatible relays require reasoning_content to be replayed on
 \t\t\t\t// every assistant tool call. pi-ai normally strips thinking signatures
 \t\t\t\t// when provider ids differ, so normalize only those tool-call messages
@@ -58,17 +60,38 @@ const runtimeChanged = await patchFile('lib/index.js', [
 \t\t\t\t\t\treturn { ...message, api: model.api, provider: model.provider, model: model.id, content };
 \t\t\t\t\t})
 \t\t\t\t} : rawContext;
-\t\t\t\tconst iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {`,
+`
+
+// 0.1.1-rc.1 calls toPiContext in one line; 0.1.1-rc.2 spreads options with
+// the watchdog signal and passes the route's image policy.
+const RC1_CONTEXT_CALL = 'attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext(options, attachments, onReplayDegrade, profile.maxRequestImageBytes);'
+const RC2_CONTEXT_CALL = `attachments === void 0 ? toPiContext(options, void 0, onReplayDegrade) : await toPiContext({
+\t\t\t\t\t...options,
+\t\t\t\t\tsignal: watchdog.signal
+\t\t\t\t}, attachments, onReplayDegrade, profile.maxRequestImageBytes, {
+\t\t\t\t\tmaxPixels: profile.requestImagePixelBudget,
+\t\t\t\t\tmaxBytes: profile.requestImageMaxBytes
+\t\t\t\t});`
+
+const runtimeChanged = await patchFile('lib/index.js', [
+  {
+    label: 'cross-provider DeepSeek tool replay',
+    candidates: [RC2_CONTEXT_CALL, RC1_CONTEXT_CALL].map((call) => ({
+      before: `\t\t\t\tconst context = ${call}\n\t\t\t\tconst iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {`,
+      after: `\t\t\t\tconst rawContext = ${call}${toolReplayNormalization}\t\t\t\tconst iterator = toStreamChunks(snapshot.models.streamSimple(model, context, {`,
+    })),
   },
   {
     label: 'explicit endpoint connection probe',
-    before: `\tif (request.provider !== void 0) {
+    candidates: [{
+      before: `\tif (request.provider !== void 0) {
 \t\tconst installed = catalogModels(request.provider);`,
-    after: `\t// A provider-only discovery is a catalog lookup. Supplying baseURL is an
+      after: `\t// A provider-only discovery is a catalog lookup. Supplying baseURL is an
 \t// explicit connection probe: reach the endpoint and let storedApiKey resolve
 \t// the route's write-only credential instead of returning a cached catalog.
 \tif (request.provider !== void 0 && request.baseURL === void 0) {
 \t\tconst installed = catalogModels(request.provider);`,
+    }],
   },
 ])
 
