@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import type { PromptAttachment } from '../domain/prompt-context.js'
-import { rankWorkspaceFiles } from './workspace-file-ranker.js'
+import { matchBareFileName, rankWorkspaceFiles } from './workspace-file-ranker.js'
 import type { OpenWorkspaceFileRequest, WorkspaceFileView } from './types.js'
 
 const MAX_INDEXED_FILES = 5_000
@@ -86,9 +86,16 @@ export class WorkspaceFileService implements vscode.Disposable {
 
   async open(request: OpenWorkspaceFileRequest): Promise<boolean> {
     const indexed = request.id === undefined ? undefined : this.filesById.get(request.id)
-    const uri = request.id === undefined
+    let uri = request.id === undefined
       ? await resolveWorkspaceReference(request.path)
       : indexed !== undefined && vscode.workspace.getWorkspaceFolder(indexed.uri) !== undefined ? indexed.uri : undefined
+    // Bare names from model prose (e.g. `manifest.test.ts`) carry no directory
+    // segments, so fall back to an exact basename lookup in the file index.
+    if (uri === undefined && request.id === undefined && request.path !== undefined) {
+      const matches = matchBareFileName((await this.ensureIndex()).map((file) => file.view), request.path.trim())
+      const match = matches[0] === undefined ? undefined : this.filesById.get(matches[0].id)
+      if (match !== undefined && vscode.workspace.getWorkspaceFolder(match.uri) !== undefined) uri = match.uri
+    }
     if (uri === undefined) return false
     const document = await vscode.workspace.openTextDocument(uri)
     const editor = await vscode.window.showTextDocument(document, { preview: true })

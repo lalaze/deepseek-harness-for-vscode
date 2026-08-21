@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { findFileReferences, parseFileReference } from '../src/webview/file-reference.js'
+import { fileExtension, findFileReferences, parseFileReference } from '../src/webview/file-reference.js'
 
 describe('parseFileReference', () => {
   it('parses relative, absolute, Windows, and line-anchor references', () => {
@@ -26,5 +26,20 @@ describe('findFileReferences', () => {
       { path: 'src/ui/view.ts', line: 27, start: 7, end: 24 },
       { path: 'package.json', start: 38, end: 50 },
     ])
+  })
+})
+
+describe('fileExtension', () => {
+  it('extracts the lowercase extension used for file-type icons', () => {
+    expect(fileExtension('src/ui/App.TSX')).toBe('tsx')
+    expect(fileExtension('manifest.test.ts')).toBe('ts')
+    expect(fileExtension('C:\\repo\\styles.css')).toBe('css')
+  })
+
+  it('returns nothing for dotfiles, extensionless names, and odd suffixes', () => {
+    expect(fileExtension('.gitignore')).toBeUndefined()
+    expect(fileExtension('Makefile')).toBeUndefined()
+    expect(fileExtension('src/dir.with.dot/')).toBeUndefined()
+    expect(fileExtension('archive.tar.gz')).toBe('gz')
   })
 })

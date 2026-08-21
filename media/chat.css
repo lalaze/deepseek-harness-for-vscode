@@ -1174,6 +1174,44 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .md-file-link { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
 .md-file-link:hover { color: var(--vscode-textLink-activeForeground); text-decoration-style: solid; }
 .md-file-link:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+/* Lightweight file-type badge: one glyph, tinted with the language's brand hue. */
+.md-file-link[data-file-ext]::before {
+  content: attr(data-file-ext);
+  margin-right: 3px;
+  padding: 0 3px;
+  display: inline-block;
+  max-width: 5.5em;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  border-radius: 3px;
+  font-size: 8.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.md-file-link[data-file-ext="ts"]::before { content: 'TS'; color: #3178c6; background: color-mix(in srgb, #3178c6 18%, transparent); }
+.md-file-link[data-file-ext="tsx"]::before { content: '⚛'; color: #3178c6; background: color-mix(in srgb, #3178c6 18%, transparent); }
+.md-file-link[data-file-ext="js"]::before { content: 'JS'; color: #b8860b; background: color-mix(in srgb, #f7df1e 30%, transparent); }
+.md-file-link[data-file-ext="jsx"]::before { content: '⚛'; color: #b8860b; background: color-mix(in srgb, #f7df1e 30%, transparent); }
+.md-file-link[data-file-ext="json"]::before { content: '{}'; color: #b8860b; background: color-mix(in srgb, #f7df1e 24%, transparent); }
+.md-file-link[data-file-ext="md"]::before { content: 'M↓'; color: #6a9fb5; background: color-mix(in srgb, #6a9fb5 20%, transparent); }
+.md-file-link[data-file-ext="css"]::before { content: '#'; color: #663399; background: color-mix(in srgb, #a074c4 24%, transparent); }
+.md-file-link[data-file-ext="html"]::before { content: '<>'; color: #e34c26; background: color-mix(in srgb, #e34c26 18%, transparent); }
+.md-file-link[data-file-ext="py"]::before { content: 'Py'; color: #4b8bbe; background: color-mix(in srgb, #4b8bbe 18%, transparent); }
+.md-file-link[data-file-ext="sh"]::before { content: '>_'; color: #4eaa25; background: color-mix(in srgb, #4eaa25 18%, transparent); }
+.md-file-link[data-file-ext="yml"]::before,
+.md-file-link[data-file-ext="yaml"]::before { content: 'Y'; color: #cb171e; background: color-mix(in srgb, #cb171e 14%, transparent); }
+.md-file-link[data-file-ext="toml"]::before { content: '⚙'; color: #9c4221; background: color-mix(in srgb, #9c4221 16%, transparent); }
+.md-file-link[data-file-ext="png"]::before,
+.md-file-link[data-file-ext="jpg"]::before,
+.md-file-link[data-file-ext="jpeg"]::before,
+.md-file-link[data-file-ext="gif"]::before,
+.md-file-link[data-file-ext="svg"]::before,
+.md-file-link[data-file-ext="webp"]::before,
+.md-file-link[data-file-ext="ico"]::before { content: '▦'; color: #a074c4; background: color-mix(in srgb, #a074c4 20%, transparent); }
 #attach-selection { display: inline-flex; align-items: center; }
 
 /* Responsive layout: keep the composer compact and avoid horizontal overflow. */
