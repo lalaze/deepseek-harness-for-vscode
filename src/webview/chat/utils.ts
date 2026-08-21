@@ -45,10 +45,18 @@ export function isNearBottom(element: HTMLElement): boolean {
 }
 
 export function scrollConversationToBottom(): void {
+  const conversation = elements.conversation
+  // Bypass `scroll-behavior: smooth` so the jump lands in the same frame; a
+  // smooth animation is interruptible by the catalog pushes that follow a
+  // session open, leaving the view stranded at the top.
+  const previous = conversation.style.scrollBehavior
+  conversation.style.scrollBehavior = 'auto'
+  conversation.scrollTop = conversation.scrollHeight
+  conversation.style.scrollBehavior = previous
+  // Re-assert once layout settles in case late content (images, markdown)
+  // grows the transcript after the jump.
   window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      elements.conversation.scrollTop = elements.conversation.scrollHeight
-    })
+    conversation.scrollTop = conversation.scrollHeight
   })
 }
 

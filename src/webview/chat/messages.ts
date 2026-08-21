@@ -97,13 +97,19 @@ export function renderMessages(active: ActiveSessionView | undefined): void {
     scrollConversationToBottom()
   } else if (prepended) {
     elements.conversation.scrollTop = previousTop + elements.conversation.scrollHeight - previousHeight
-  } else {
-    // Streaming below the viewport must not steal the reader's position.
+  } else if (!stickToBottomOnLoad) {
+    // Streaming below the viewport must not steal the reader's position, but
+    // a freshly opened session must keep pinning to the bottom until its
+    // load-scroll has actually landed.
     elements.conversation.scrollTop = previousTop
   }
-  // Once the transcript for a freshly opened session is on screen, stop
-  // forcing the bottom; later prepends/streams use normal stickiness.
-  if (messages.length > 0) setStickToBottomOnLoad(false)
+  // Keep forcing the bottom until the freshly opened session's transcript has
+  // actually landed there. Clearing it as soon as messages exist lets the
+  // catalog pushes (models/skills/subagents/commands) that follow an open
+  // reset the view to the top before the load-scroll applies.
+  if (stickToBottomOnLoad && messages.length > 0 && isNearBottom(elements.conversation)) {
+    setStickToBottomOnLoad(false)
+  }
   setRenderedSessionId(sessionId)
 }
 
