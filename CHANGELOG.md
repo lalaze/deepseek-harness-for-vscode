@@ -1,8 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+- 修复 0.5.0 在部分机器上无法启动的问题：旧版本扩展遗留在 Harness Profile 里的过期 @deepseek-ai 运行时包（如 rc.6 时代的 dsh-llm-deepseek，不认识 low 推理档）会遮蔽 VSIX 内置运行时，导致 Gateway 启动崩溃（`reasoningEffort expected "off" | "high" | "max" but got "low"`）。启动前现在会自动清理版本不匹配的遗留包，受影响用户重新加载窗口即可自愈。
+
 ## 0.5.0
 
 - 内置运行时升级为官方 `@deepseek-ai/dsh@0.1.1-rc.1`：纳入 rc.8 对自定义 OpenAI 兼容网关的修复（请求格式差异、推理内容回传缺失），上下文占用环与 token 实时统计在中转网关下恢复；`dsh-llm-pi-ai` 兼容补丁重定，`supportsDeveloperRole` 已由上游原生收录。
+- 模型选择器：模型行改为扁平 Codex 风格（选中仅 ✓、hover 圆角底色、单行显示）；多个提供商时为左右双栏（左提供商、右模型），单提供商直接列出；面板按内容自适应高度，不再出现滚动条。
+- 推理控件压缩为单行 Codex 尺寸（20px 分段药丸 + 14px 旋钮 + 丸内档位圆点），保留拖动跟随与档位特效。
+- 内置插件目录移除 DSH Vision Router，不再随扩展默认安装。
 - 新增会话导入：历史面板与标题栏可导入 DSH 官方会话 ZIP、ChatGPT 导出 ZIP、JSONL/文件夹，以及本机 Claude Code / Codex / Cursor 等 Agent 会话。
 - 首次启动会补装 `dsh-chat-import`（默认插件种子升至 v2）；导入后刷新会话列表并打开新导入的会话。
 - 权限安全门：选择 Full Access 时弹出确认对话框（Codex 与官方 Web UI 同款），取消、Esc 或点击外部均不生效。
