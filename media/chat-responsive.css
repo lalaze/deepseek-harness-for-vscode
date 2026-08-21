@@ -118,8 +118,7 @@ body {
   }
 
   .permission-toggle {
-    width: min(138px, 40vw);
-    min-width: min(116px, 100%);
+    max-width: min(138px, 40vw);
   }
 
   .key-banner {
