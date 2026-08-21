@@ -25,6 +25,7 @@ import { isPermissionPresetId, type PermissionPresetId } from '../domain/permiss
 import { isProviderRouteInUse } from '../domain/provider.js'
 import type { PromptAttachment } from '../domain/prompt-context.js'
 import { agentPresetTransition, type PromptConfiguration } from '../domain/prompt-configuration.js'
+import { projectSessionChanges } from '../domain/session-changes.js'
 import {
   projectConversation,
   projectionCommands,
@@ -189,6 +190,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     const goal = projectionGoal(this.projections.goal)
     const tokenUsage = projectionTokenUsage(this.projections.tokenUsage)
     const contextPressure = projectionContextPressure(this.projections.contextPressure)
+    const changes = projectSessionChanges(this.entries)
     const active = activeSummary === undefined ? undefined : {
       id: String(activeSummary.sessionId),
       title: sessionListItem(activeSummary, this.labels).title,
@@ -224,6 +226,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       ...(goal === undefined ? {} : { goal }),
       ...(tokenUsage === undefined ? {} : { tokenUsage }),
       ...(contextPressure === undefined ? {} : { contextPressure }),
+      ...(changes === undefined ? {} : { changes }),
     }
     return {
       phase: this.phase,

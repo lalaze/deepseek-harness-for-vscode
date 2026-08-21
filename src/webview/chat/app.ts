@@ -43,6 +43,7 @@ export function render(): void {
   renderComposer(active)
   renderActivityStatus(active)
   renderQueued(active)
+  components.sessionChanges.update(active?.changes)
   updateCommandMenu()
   components.connectionSettings.update(
     payload.connectionSettings ?? { writable: false, providers: [] },
