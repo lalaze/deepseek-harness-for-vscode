@@ -409,7 +409,7 @@ function isLegacyRelayReasoningEfforts(efforts: object): boolean {
 }
 
 function relayModels(models: readonly string[]): { id: string; reasoningEfforts: object }[] {
-  const ids = models.length > 0 ? models : ['deepseek-v4-flash', 'deepseek-v4-pro']
+  const ids = models.length > 0 ? models : ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp']
   return ids.map((id) => ({
     id,
     reasoningEfforts: { ...RELAY_REASONING_EFFORTS },

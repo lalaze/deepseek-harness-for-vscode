@@ -10,7 +10,7 @@ import {
 
 describe('official Harness option catalogs', () => {
   it('contains the two official DeepSeek V4 routes', () => {
-    expect(MODEL_OPTIONS.map((item) => item.id)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    expect(MODEL_OPTIONS.map((item) => item.id)).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp'])
   })
 
   it('contains the official reasoning and preset ids', () => {

@@ -667,17 +667,31 @@ body.vscode-dark .empty-logo, body.vscode-high-contrast .empty-logo { filter: in
 .configuration-group:not(.collapsed) .configuration-group-current { display: none; }
 .configuration-options { display: grid; gap: 2px; }
 .configuration-model-group .configuration-options { grid-template-columns: 1fr; gap: 4px; }
-.configuration-model-group-header {
-  margin: 4px 2px 2px;
+/* Second-level provider accordion inside the Models group (only rendered
+   when more than one provider is configured). */
+.configuration-provider-group { display: grid; gap: 4px; }
+.configuration-provider-toggle {
+  width: 100%;
   padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: color-mix(in srgb, var(--vscode-foreground) 82%, transparent);
   background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent);
   border: 1px solid var(--vscode-widget-border);
   border-radius: 8px;
   font-size: 11px;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
-.configuration-model-group-header:first-child { margin-top: 0; }
+.configuration-provider-toggle:hover { color: var(--vscode-foreground); background: var(--vscode-list-hoverBackground); }
+.configuration-provider-toggle:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.configuration-provider-chevron { flex: none; transition: transform 140ms ease; }
+.configuration-provider-group:not(.collapsed) .configuration-provider-chevron { transform: rotate(90deg); }
+.configuration-provider-current { min-width: 0; margin-left: auto; overflow: hidden; color: color-mix(in srgb, var(--vscode-foreground) 68%, transparent); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-provider-group.collapsed .configuration-provider-models { display: none; }
+.configuration-provider-models { display: grid; gap: 4px; }
 .configuration-option {
   width: 100%;
   min-width: 0;

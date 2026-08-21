@@ -10,6 +10,11 @@ export const MODEL_OPTIONS = [
     label: 'DeepSeek V4 Pro',
     description: 'Stronger capabilities for complex tasks and long reasoning chains.',
   },
+  {
+    id: 'deepseek-v4-flash-vision-exp',
+    label: 'DeepSeek V4 Flash Vision (Exp)',
+    description: 'Image understanding: describe pictures, read screenshots, and analyse charts.',
+  },
 ] as const
 
 export const REASONING_OPTIONS = [
