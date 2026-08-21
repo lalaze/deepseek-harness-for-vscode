@@ -31,7 +31,7 @@ describe('pruneShadowedRuntimePackages', () => {
   it('removes profile copies whose version differs from the bundled runtime', async () => {
     const { profileScope, bundledScope } = await setup()
     await plantPackage(profileScope, 'dsh-llm-deepseek', '0.1.0-rc.6')
-    await plantPackage(bundledScope, 'dsh-llm-deepseek', '0.1.1-rc.1')
+    await plantPackage(bundledScope, 'dsh-llm-deepseek', '0.1.1-rc.2')
     const lines: string[] = []
 
     const removed = await pruneShadowedRuntimePackages(profileScope, bundledScope, (line) => lines.push(line))
@@ -43,14 +43,14 @@ describe('pruneShadowedRuntimePackages', () => {
 
   it('keeps profile copies that match the bundled version or have no bundled counterpart', async () => {
     const { profileScope, bundledScope } = await setup()
-    await plantPackage(profileScope, 'dsh-llm-deepseek', '0.1.1-rc.1')
-    await plantPackage(bundledScope, 'dsh-llm-deepseek', '0.1.1-rc.1')
+    await plantPackage(profileScope, 'dsh-llm-deepseek', '0.1.1-rc.2')
+    await plantPackage(bundledScope, 'dsh-llm-deepseek', '0.1.1-rc.2')
     await plantPackage(profileScope, 'dsh-profile-only-plugin', '9.9.9')
 
     const removed = await pruneShadowedRuntimePackages(profileScope, bundledScope, () => {})
 
     expect(removed).toEqual([])
-    await expect(readVersion(profileScope, 'dsh-llm-deepseek')).resolves.toBe('0.1.1-rc.1')
+    await expect(readVersion(profileScope, 'dsh-llm-deepseek')).resolves.toBe('0.1.1-rc.2')
     await expect(readVersion(profileScope, 'dsh-profile-only-plugin')).resolves.toBe('9.9.9')
   })
 
@@ -65,7 +65,7 @@ describe('pruneShadowedRuntimePackages', () => {
     const broken = path.join(profileScope, 'dsh-llm-deepseek')
     await mkdir(broken, { recursive: true })
     await writeFile(path.join(broken, 'package.json'), 'not json')
-    await plantPackage(bundledScope, 'dsh-llm-deepseek', '0.1.1-rc.1')
+    await plantPackage(bundledScope, 'dsh-llm-deepseek', '0.1.1-rc.2')
 
     const removed = await pruneShadowedRuntimePackages(profileScope, bundledScope, () => {})
 
