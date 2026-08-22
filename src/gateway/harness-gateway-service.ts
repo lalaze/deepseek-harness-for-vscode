@@ -98,6 +98,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private archivedIds = new Set<string>()
   private restoredIds = new Set<string>()
   private archiveRevision = 0
+  private archiveBaselineLoaded = false
 
   readonly onDidChange = this.changeEmitter.event
 
@@ -725,7 +726,12 @@ export class HarnessGatewayService implements vscode.Disposable {
       if (wasRestored) this.restoredIds.add(id)
       throw cause
     }
-    await this.persistRestoredIds()
+    try {
+      await this.persistRestoredIds()
+    } catch (cause) {
+      if (wasRestored) this.restoredIds.add(id)
+      throw cause
+    }
     this.fireChange()
     if (this.activeSessionId === id && this.isArchived(id)) await this.leaveArchivedSelection()
   }
@@ -737,7 +743,14 @@ export class HarnessGatewayService implements vscode.Disposable {
   async restoreSession(sessionId: string): Promise<void> {
     if (!this.archivedIds.has(sessionId)) return
     this.restoredIds.add(sessionId)
-    await this.persistRestoredIds()
+    try {
+      await this.persistRestoredIds()
+    } catch (cause) {
+      // Roll back the in-memory overlay so a failed persistence cannot report
+      // a restore that would vanish after restart.
+      this.restoredIds.delete(sessionId)
+      throw cause
+    }
     this.fireChange()
   }
 
@@ -943,6 +956,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       // was in flight. Only an up-to-date revision may replace the state.
       if (this.archiveRevision !== revision) return
       this.installArchivedIds(archived.map(String))
+      this.archiveBaselineLoaded = true
     } catch (cause) {
       // Keep the previous set: a transient failure should not unhide archived sessions.
       this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the archived session set: {0}', errorMessage(cause)))
@@ -959,7 +973,11 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.archiveRevision += archivedChanged ? 1 : 0
     if (pruned.size === this.restoredIds.size) return
     this.restoredIds = new Set(pruned)
-    void this.persistRestoredIds()
+    void this.persistRestoredIds().catch((cause: unknown) => {
+      // Background pruning must not fail the caller; persistRestoredIds already
+      // logs the underlying failure.
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to persist pruned restored sessions: {0}', errorMessage(cause)))
+    })
   }
 
   private async persistRestoredIds(): Promise<void> {
@@ -967,10 +985,16 @@ export class HarnessGatewayService implements vscode.Disposable {
       await this.globalState.update(RESTORED_ARCHIVE_STATE_KEY, [...this.restoredIds])
     } catch (cause) {
       this.output.appendLine(vscode.l10n.t('[gateway] Failed to save the restored session list: {0}', errorMessage(cause)))
+      throw cause
     }
   }
 
   private isArchived(sessionId: string): boolean {
+    // Until the official archive set has been loaded once, an empty archivedIds
+    // must not be treated as authoritative: that would expose (or hide) the
+    // wrong sessions after a startup failure of workspace.list. Be conservative
+    // and treat nothing as archived until the baseline is known.
+    if (!this.archiveBaselineLoaded) return false
     return isEffectivelyArchived(sessionId, this.archivedIds, this.restoredIds)
   }
 
@@ -981,7 +1005,9 @@ export class HarnessGatewayService implements vscode.Disposable {
   private async leaveArchivedSelection(): Promise<void> {
     const next = this.visibleSummaries()[0]
     if (next !== undefined) {
-      await this.selectSession(String(next.sessionId))
+      // openSession resolves sub-agent rows through their parent; selectSession
+      // would route a sub-agent through the ordinary session APIs.
+      await this.openSession(String(next.sessionId))
       return
     }
     await this.createSession()
