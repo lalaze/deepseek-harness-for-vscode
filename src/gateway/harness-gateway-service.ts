@@ -716,20 +716,21 @@ export class HarnessGatewayService implements vscode.Disposable {
   async archiveSession(id: string): Promise<void> {
     const summary = this.summaries.get(id)
     if (summary === undefined || (summary.blank === true && !this.isArchived(id))) return
-    const wasRestored = this.restoredIds.delete(id)
+    const snapshot = new Set(this.restoredIds)
+    this.restoredIds.delete(id)
     try {
       const archived = valueOf(await this.requireClient().workspace.archiveSession({
         sessionId: id as SessionId,
       })).archivedSessionIds
-      this.installArchivedIds(archived.map(String))
+      this.installArchivedIds(archived.map(String), false)
     } catch (cause) {
-      if (wasRestored) this.restoredIds.add(id)
+      this.restoredIds = snapshot
       throw cause
     }
     try {
       await this.persistRestoredIds()
     } catch (cause) {
-      if (wasRestored) this.restoredIds.add(id)
+      this.restoredIds = snapshot
       throw cause
     }
     this.fireChange()
@@ -742,13 +743,15 @@ export class HarnessGatewayService implements vscode.Disposable {
    */
   async restoreSession(sessionId: string): Promise<void> {
     if (!this.archivedIds.has(sessionId)) return
+    const snapshot = new Set(this.restoredIds)
     this.restoredIds.add(sessionId)
     try {
       await this.persistRestoredIds()
     } catch (cause) {
-      // Roll back the in-memory overlay so a failed persistence cannot report
-      // a restore that would vanish after restart.
-      this.restoredIds.delete(sessionId)
+      // Roll back the exact pre-operation overlay so a failed persistence
+      // cannot report a restore that would vanish after restart, and cannot
+      // drop an ID that was already present before this call.
+      this.restoredIds = snapshot
       throw cause
     }
     this.fireChange()
@@ -889,6 +892,9 @@ export class HarnessGatewayService implements vscode.Disposable {
       this.summaries.delete(String(frame.sessionId))
     } else if (frame.type === 'host/archived-sessions-changed') {
       this.installArchivedIds(frame.archivedSessionIds.map(String))
+      // A host snapshot is authoritative: once accepted it establishes the
+      // baseline even if a concurrent workspace.list refresh is still pending.
+      this.archiveBaselineLoaded = true
     } else if (frame.type === 'host/session-status') {
       const id = String(frame.sessionId)
       const summary = this.summaries.get(id)
@@ -964,14 +970,21 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.fireChange()
   }
 
-  private installArchivedIds(ids: readonly string[]): void {
+  /**
+   * Applies an authoritative archived-id snapshot. With `persist` (host events
+   * and standalone refreshes) the pruned overlay is written in the background;
+   * transactional callers pass false and own the single persistRestoredIds
+   * call after the whole operation succeeds, so no concurrent write can leak
+   * a partial overlay.
+   */
+  private installArchivedIds(ids: readonly string[], persist = true): void {
     const next = new Set(ids)
     const pruned = pruneRestoredArchiveIds(next, this.restoredIds)
     const archivedChanged = next.size !== this.archivedIds.size
       || [...next].some((id) => !this.archivedIds.has(id))
     this.archivedIds = next
     this.archiveRevision += archivedChanged ? 1 : 0
-    if (pruned.size === this.restoredIds.size) return
+    if (!persist || pruned.size === this.restoredIds.size) return
     this.restoredIds = new Set(pruned)
     void this.persistRestoredIds().catch((cause: unknown) => {
       // Background pruning must not fail the caller; persistRestoredIds already
@@ -1125,6 +1138,11 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.client = undefined
     this.connectionSettings.disconnect()
     this.phase = 'idle'
+    // A new connection must re-establish the official archive baseline: bump
+    // the revision so any in-flight workspace.list response is discarded, and
+    // clear the flag so an empty archivedIds is not treated as authoritative.
+    this.archiveRevision += 1
+    this.archiveBaselineLoaded = false
   }
 
   private fireChange(): void {
