@@ -97,6 +97,7 @@ export class HarnessGatewayService implements vscode.Disposable {
   private selectionGeneration = 0
   private archivedIds = new Set<string>()
   private restoredIds = new Set<string>()
+  private archiveRevision = 0
 
   readonly onDidChange = this.changeEmitter.event
 
@@ -935,7 +936,12 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   private async refreshArchiveSet(): Promise<void> {
     try {
+      const revision = this.archiveRevision
       const archived = valueOf(await this.requireClient().workspace.list({})).archivedSessionIds
+      // Discard a stale response: a host/archived-sessions-changed event or a
+      // newer authoritative refresh may have advanced the set while this RPC
+      // was in flight. Only an up-to-date revision may replace the state.
+      if (this.archiveRevision !== revision) return
       this.installArchivedIds(archived.map(String))
     } catch (cause) {
       // Keep the previous set: a transient failure should not unhide archived sessions.
@@ -945,8 +951,12 @@ export class HarnessGatewayService implements vscode.Disposable {
   }
 
   private installArchivedIds(ids: readonly string[]): void {
-    this.archivedIds = new Set(ids)
-    const pruned = pruneRestoredArchiveIds(this.archivedIds, this.restoredIds)
+    const next = new Set(ids)
+    const pruned = pruneRestoredArchiveIds(next, this.restoredIds)
+    const archivedChanged = next.size !== this.archivedIds.size
+      || [...next].some((id) => !this.archivedIds.has(id))
+    this.archivedIds = next
+    this.archiveRevision += archivedChanged ? 1 : 0
     if (pruned.size === this.restoredIds.size) return
     this.restoredIds = new Set(pruned)
     void this.persistRestoredIds()
