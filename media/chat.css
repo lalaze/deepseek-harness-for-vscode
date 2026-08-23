@@ -136,6 +136,12 @@ body.vscode-dark .brand-logo, body.vscode-high-contrast .brand-logo { filter: in
 }
 .session-row:hover { background: var(--vscode-list-hoverBackground); }
 .session-row.active { color: var(--vscode-list-activeSelectionForeground); background: var(--vscode-list-activeSelectionBackground); }
+/* The 30px reserved action gutter sits outside the button, so hover it with
+   the row: the whole row (including the gutter) highlights together. */
+.session-row-wrap:hover .session-row { background: var(--vscode-list-hoverBackground); }
+.session-row-wrap:focus-within .session-row { background: var(--vscode-list-hoverBackground); }
+.session-row-wrap:hover .session-row.active,
+.session-row-wrap:focus-within .session-row.active { background: var(--vscode-list-activeSelectionBackground); }
 .session-row-wrap { position: relative; }
 .session-row.has-archive-action { padding-right: 30px; }
 .session-archive-action {
@@ -149,6 +155,15 @@ body.vscode-dark .brand-logo, body.vscode-high-contrast .brand-logo { filter: in
 .session-row-wrap:focus-within .session-archive-action {
   opacity: 1;
   pointer-events: auto;
+}
+/* Keyboard reachability: the action is opacity:0 until hover/focus-within,
+   so a tab-focused action must be visibly revealed without a hover state. */
+.session-archive-action:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  border-radius: 6px;
 }
 .history-archive-toggle {
   height: 23px;

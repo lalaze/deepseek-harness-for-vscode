@@ -96,6 +96,12 @@ export class HarnessGatewayService implements vscode.Disposable {
   private publishScheduled = false
   private selectionGeneration = 0
   private archivedIds = new Set<string>()
+  // Restore overlay is persisted as a whole array via globalState, which is
+  // shared across VS Code windows: concurrent archive/restore from two windows
+  // is last-write-wins and may overwrite the other window's overlay. This is a
+  // known, accepted limitation of the workbench-side restore (the official
+  // runtime has no unarchive RPC); each window keeps its own in-memory view
+  // and re-syncs on the next host snapshot.
   private restoredIds = new Set<string>()
   private archiveRevision = 0
   private archiveBaselineLoaded = false
@@ -766,9 +772,15 @@ export class HarnessGatewayService implements vscode.Disposable {
       await this.persistRestoredIds()
     } catch (cause) {
       // Roll back the exact pre-operation overlay so a failed persistence
-      // cannot report a restore that would vanish after restart, and cannot
-      // drop an ID that was already present before this call.
-      this.restoredIds = snapshot
+      // cannot report a restore that would vanish after restart, cannot drop
+      // an ID that was already present before this call, and cannot leave a
+      // stale partial overlay on disk from a concurrent host frame.
+      this.restoredIds = new Set(snapshot)
+      try {
+        await this.persistRestoredIds()
+      } catch (persistCause) {
+        this.output.appendLine(vscode.l10n.t('[gateway] Failed to roll back the restored session list: {0}', errorMessage(persistCause)))
+      }
       throw cause
     }
     this.fireChange()
@@ -908,10 +920,11 @@ export class HarnessGatewayService implements vscode.Disposable {
     } else if (frame.type === 'host/session-removed') {
       this.summaries.delete(String(frame.sessionId))
     } else if (frame.type === 'host/archived-sessions-changed') {
-      this.installArchivedIds(frame.archivedSessionIds.map(String))
-      // A host snapshot is authoritative: once accepted it establishes the
-      // baseline even if a concurrent workspace.list refresh is still pending.
+      // A host snapshot is authoritative: establish the baseline before
+      // installing the set so the sweep inside installArchivedIds treats the
+      // archived ids as authoritative, even on the first frame.
       this.archiveBaselineLoaded = true
+      this.installArchivedIds(frame.archivedSessionIds.map(String))
     } else if (frame.type === 'host/session-status') {
       const id = String(frame.sessionId)
       const summary = this.summaries.get(id)
@@ -978,8 +991,11 @@ export class HarnessGatewayService implements vscode.Disposable {
       // newer authoritative refresh may have advanced the set while this RPC
       // was in flight. Only an up-to-date revision may replace the state.
       if (this.archiveRevision !== revision) return
-      this.installArchivedIds(archived.map(String))
+      // Establish the baseline before installing the set: installArchivedIds
+      // sweeps the active selection, and the sweep must see the baseline as
+      // loaded to treat archived ids as authoritative.
       this.archiveBaselineLoaded = true
+      this.installArchivedIds(archived.map(String))
     } catch (cause) {
       // Keep the previous set: a transient failure should not unhide archived sessions.
       this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the archived session set: {0}', errorMessage(cause)))
@@ -1001,19 +1017,22 @@ export class HarnessGatewayService implements vscode.Disposable {
       || [...next].some((id) => !this.archivedIds.has(id))
     this.archivedIds = next
     this.archiveRevision += archivedChanged ? 1 : 0
-    // Every authoritative archive-set change sweeps the active selection:
-    // a session archived by another window / the official Web UI, or one that
-    // became archived while offline and re-enters via the reconnect baseline,
-    // must leave the active conversation instead of staying selected while
-    // only visible in the Archived filter.
+    if (persist && pruned.size !== this.restoredIds.size) {
+      this.restoredIds = new Set(pruned)
+      void this.persistRestoredIds().catch((cause: unknown) => {
+        // Background pruning must not fail the caller; persistRestoredIds already
+        // logs the underlying failure.
+        this.output.appendLine(vscode.l10n.t('[gateway] Failed to persist pruned restored sessions: {0}', errorMessage(cause)))
+      })
+    }
+    // Sweep after the overlay has been applied: a session that was restored in
+    // this workbench and is archived again must be swept now that its restore
+    // overlay is gone. Every authoritative archive-set change sweeps the active
+    // selection — a session archived by another window / the official Web UI,
+    // or one that became archived while offline and re-enters via the reconnect
+    // baseline — instead of staying selected while only visible in the
+    // Archived filter.
     this.sweepArchivedSelection()
-    if (!persist || pruned.size === this.restoredIds.size) return
-    this.restoredIds = new Set(pruned)
-    void this.persistRestoredIds().catch((cause: unknown) => {
-      // Background pruning must not fail the caller; persistRestoredIds already
-      // logs the underlying failure.
-      this.output.appendLine(vscode.l10n.t('[gateway] Failed to persist pruned restored sessions: {0}', errorMessage(cause)))
-    })
   }
 
   private sweepArchivedSelection(): void {
