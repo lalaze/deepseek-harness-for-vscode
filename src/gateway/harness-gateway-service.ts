@@ -724,22 +724,39 @@ export class HarnessGatewayService implements vscode.Disposable {
       })).archivedSessionIds
       this.installArchivedIds(archived.map(String), false)
     } catch (cause) {
-      this.restoredIds = snapshot
+      await this.rollbackRestoredOverlay(snapshot, cause)
       throw cause
     }
     try {
       await this.persistRestoredIds()
     } catch (cause) {
-      this.restoredIds = snapshot
+      await this.rollbackRestoredOverlay(snapshot, cause)
       throw cause
     }
     this.fireChange()
-    if (this.activeSessionId === id && this.isArchived(id)) await this.leaveArchivedSelection()
+  }
+
+  /**
+   * Restores the exact pre-operation overlay and flushes it to disk. A
+   * concurrent host frame may have persisted a partial overlay (the deleted id)
+   * in the background while our RPC was pending; rolling back memory alone
+   * would leave that stale partial state on disk, losing the restore after
+   * restart. Re-persisting the snapshot closes the gap.
+   */
+  private async rollbackRestoredOverlay(snapshot: ReadonlySet<string>, cause: unknown): Promise<void> {
+    this.restoredIds = new Set(snapshot)
+    try {
+      await this.persistRestoredIds()
+    } catch (persistCause) {
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to roll back the restored session list: {0}', errorMessage(persistCause)))
+    }
+    this.output.appendLine(vscode.l10n.t('[gateway] Archive operation failed: {0}', errorMessage(cause)))
   }
 
   /**
    * Brings a Harness-archived session back to this workbench's default list.
-   * rc.7 has no unarchive RPC, so restore is a durable overlay on the official set.
+   * The bundled runtime (0.1.1-rc.2) has no unarchive RPC, so restore is a
+   * durable overlay on the official set.
    */
   async restoreSession(sessionId: string): Promise<void> {
     if (!this.archivedIds.has(sessionId)) return
@@ -984,12 +1001,27 @@ export class HarnessGatewayService implements vscode.Disposable {
       || [...next].some((id) => !this.archivedIds.has(id))
     this.archivedIds = next
     this.archiveRevision += archivedChanged ? 1 : 0
+    // Every authoritative archive-set change sweeps the active selection:
+    // a session archived by another window / the official Web UI, or one that
+    // became archived while offline and re-enters via the reconnect baseline,
+    // must leave the active conversation instead of staying selected while
+    // only visible in the Archived filter.
+    this.sweepArchivedSelection()
     if (!persist || pruned.size === this.restoredIds.size) return
     this.restoredIds = new Set(pruned)
     void this.persistRestoredIds().catch((cause: unknown) => {
       // Background pruning must not fail the caller; persistRestoredIds already
       // logs the underlying failure.
       this.output.appendLine(vscode.l10n.t('[gateway] Failed to persist pruned restored sessions: {0}', errorMessage(cause)))
+    })
+  }
+
+  private sweepArchivedSelection(): void {
+    const active = this.activeSessionId
+    if (active === undefined) return
+    if (!this.isArchived(active)) return
+    void this.leaveArchivedSelection().catch((cause: unknown) => {
+      this.output.appendLine(vscode.l10n.t('[gateway] Failed to leave the archived session: {0}', errorMessage(cause)))
     })
   }
 

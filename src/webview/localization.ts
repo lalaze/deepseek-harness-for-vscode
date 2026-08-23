@@ -140,6 +140,7 @@ export const ENGLISH_WEBVIEW_MESSAGES = {
   unknownError: 'Unknown error',
   noMatchingConversations: 'No matching conversations',
   noArchivedConversations: 'No archived conversations',
+  noMatchingArchivedConversations: 'No matching archived conversations',
   status: 'Status',
   you: 'You',
   reasoningProcess: 'Think',

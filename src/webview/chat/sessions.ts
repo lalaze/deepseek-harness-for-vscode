@@ -76,6 +76,9 @@ export function renderSessions(): void {
       : payload.state.archivedSessions.filter((session) => resultIds.has(session.id))
     if (archivedHits.length > 0) {
       fragment.append(node('p', 'muted-empty', t('archivedSearchHint', { count: String(archivedHits.length) })))
+    } else if (showingArchived && query !== '') {
+      // Archived rows exist but none match the search query.
+      fragment.append(node('p', 'muted-empty', t('noMatchingArchivedConversations')))
     } else {
       fragment.append(node('p', 'muted-empty', showingArchived ? t('noArchivedConversations') : t('noMatchingConversations')))
     }
