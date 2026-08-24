@@ -290,7 +290,9 @@ export class HarnessGatewayService implements vscode.Disposable {
     if (agentPreset !== undefined) await this.configuration.setAgentPresetIfKnown(agentPreset)
     await this.refreshSessionList()
     await this.selectSession(String(created.sessionId))
-    await this.selectModel(config.provider, config.model, config.reasoningEffort, false)
+    if (config.modelSelectionConfigured) {
+      await this.selectModel(config.provider, config.model, config.reasoningEffort, false)
+    }
     const permission = projectionPermissions(this.projections.permissions)?.currentValue
     if (permission !== config.permissionMode) await this.applyPermission(config.permissionMode, false)
     return String(created.sessionId)
@@ -425,6 +427,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       const models = valueOf(await client.sessions.models({ sessionId: id }))
       if (!this.isCurrentSelection(sessionId, generation)) return
       this.models = models
+      await this.configuration.recoverModelSelection(models.current.provider, models.current.model)
       this.fireChange()
     } catch (cause) {
       this.output.appendLine(vscode.l10n.t('[gateway] Failed to load the model catalog for session {0}: {1}', sessionId, errorMessage(cause)))
@@ -609,8 +612,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     }))
     if (this.models !== undefined) this.models = { ...this.models, current: selected.selected }
     if (persist) {
-      await this.configuration.setProviderIfConfigured(provider)
-      await this.configuration.setModelIfKnown(model)
+      await this.configuration.setModelSelection(provider, model)
       if (reasoningEffort !== undefined) await this.configuration.setReasoningEffortIfKnown(reasoningEffort)
     }
     this.fireChange()

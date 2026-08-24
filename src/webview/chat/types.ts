@@ -64,7 +64,7 @@ export interface ChatElements {
   readonly permissionConfirmAccept: HTMLButtonElement
   readonly permissionConfirmCancel: HTMLButtonElement
   readonly keyBanner: HTMLElement
-  readonly setApiKey: HTMLElement
+  readonly configureConnection: HTMLElement
   readonly openSettings: HTMLElement
   readonly loading: HTMLElement
   readonly error: HTMLElement

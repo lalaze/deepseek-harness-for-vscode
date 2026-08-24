@@ -25,7 +25,9 @@ export type PermissionMode = PermissionPresetId
 
 /** Immutable settings used by the bundled official Harness Web runtime. */
 export interface HarnessConfiguration {
-  readonly model: ModelId
+  readonly model: string
+  /** Whether model and provider were persisted together by this extension. */
+  readonly modelSelectionConfigured: boolean
   readonly reasoningEffort: ReasoningEffort
   readonly agentPreset: AgentPresetId
   readonly provider: string
@@ -43,7 +45,7 @@ export class ConfigurationService implements vscode.Disposable {
 
   readonly onDidChange = this.changeEmitter.event
 
-  constructor() {
+  constructor(private readonly globalState: vscode.Memento) {
     this.subscription = vscode.workspace.onDidChangeConfiguration((event) => {
       if (RUNTIME_SETTING_KEYS.some((key) => event.affectsConfiguration(key))) {
         this.changeEmitter.fire(this.get())
@@ -53,12 +55,16 @@ export class ConfigurationService implements vscode.Disposable {
 
   get(): HarnessConfiguration {
     const config = vscode.workspace.getConfiguration('deepseekHarness')
+    const provider = nonEmpty(config.get<string>('provider'), DEEPSEEK_OFFICIAL_PROVIDER)
+    const remembered = rememberedModelSelection(this.globalState.get(LAST_MODEL_SELECTION_KEY))
+    const rememberedForProvider = remembered?.provider === provider ? remembered : undefined
 
     return {
-      model: modelId(config.get<string>('model')),
+      model: rememberedForProvider?.model ?? modelId(config.get<string>('model')),
+      modelSelectionConfigured: provider === DEEPSEEK_OFFICIAL_PROVIDER || rememberedForProvider !== undefined,
       reasoningEffort: reasoningEffort(config.get<string>('reasoningEffort')),
       agentPreset: agentPresetId(config.get<string>('agentPreset')),
-      provider: nonEmpty(config.get<string>('provider'), 'deepseek-official'),
+      provider,
       permissionMode: permissionMode(config.get<string>('permissionMode')),
       webSearch: config.get<boolean>('webSearch', true),
       autoAttachSelection: config.get<boolean>('autoAttachSelection', true),
@@ -91,6 +97,31 @@ export class ConfigurationService implements vscode.Disposable {
     // persistence hook runs. DSH's live provider directory is the authority;
     // the legacy VS Code providers array is intentionally not consulted.
     if (value.trim() !== '' && this.get().provider !== value) await this.setProvider(value)
+  }
+
+  /** Persists one resolved provider/model pair without restricting custom model IDs. */
+  async setModelSelection(provider: string, model: string): Promise<void> {
+    const normalizedProvider = provider.trim()
+    const normalizedModel = model.trim()
+    if (normalizedProvider === '' || normalizedModel === '') return
+    await this.globalState.update(LAST_MODEL_SELECTION_KEY, {
+      provider: normalizedProvider,
+      model: normalizedModel,
+    } satisfies RememberedModelSelection)
+    await this.setProviderIfConfigured(normalizedProvider)
+    await this.setModelIfKnown(normalizedModel)
+  }
+
+  /** Repairs selections saved by builds that persisted a custom provider without its model. */
+  async recoverModelSelection(provider: string, model: string): Promise<void> {
+    const current = this.get()
+    if (current.modelSelectionConfigured || current.provider !== provider.trim()) return
+    const normalizedModel = model.trim()
+    if (normalizedModel === '') return
+    await this.globalState.update(LAST_MODEL_SELECTION_KEY, {
+      provider: current.provider,
+      model: normalizedModel,
+    } satisfies RememberedModelSelection)
   }
 
   /** Reads the pre-control-plane provider array for one-time migration only. */
@@ -171,6 +202,21 @@ const RUNTIME_SETTING_KEYS = [
   'deepseekHarness.permissionMode',
   'deepseekHarness.webSearch',
 ] as const
+
+const LAST_MODEL_SELECTION_KEY = 'deepseekHarness.lastModelSelection.v1'
+
+interface RememberedModelSelection {
+  readonly provider: string
+  readonly model: string
+}
+
+function rememberedModelSelection(value: unknown): RememberedModelSelection | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const provider = typeof record['provider'] === 'string' ? record['provider'].trim() : ''
+  const model = typeof record['model'] === 'string' ? record['model'].trim() : ''
+  return provider === '' || model === '' ? undefined : { provider, model }
+}
 
 function nonEmpty(value: string | undefined, fallback: string): string {
   const normalized = value?.trim()

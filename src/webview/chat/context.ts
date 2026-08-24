@@ -36,7 +36,7 @@ export const elements: ChatElements = {
   permissionConfirmAccept: byId<HTMLButtonElement>('permission-confirm-accept'),
   permissionConfirmCancel: byId<HTMLButtonElement>('permission-confirm-cancel'),
   keyBanner: byId<HTMLElement>('key-banner'),
-  setApiKey: byId<HTMLElement>('set-api-key'),
+  configureConnection: byId<HTMLElement>('configure-connection'),
   openSettings: byId<HTMLElement>('open-settings'),
   loading: byId<HTMLElement>('loading'),
   error: byId<HTMLElement>('error'),

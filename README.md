@@ -61,7 +61,7 @@ For example, an Apple Silicon Mac requires the `darwin-arm64` package.
 
 1. Open the project you want to work on.
 2. Select the **DeepSeek Harness** icon in the Activity Bar.
-3. Open **Connection settings** and configure DeepSeek Official or add a relay source. You can also run `DeepSeek Harness: Set API Key` for the official source.
+3. Open **Connection settings** and enter either the official endpoint or a compatible gateway Base URL for the built-in DeepSeek source. Add a relay source when you need different model IDs or multiple endpoints. You can also run `DeepSeek Harness: Set API Key` for the built-in source.
 4. Describe your task in the composer and send it.
 
 No Harness install or start command is required.
@@ -97,7 +97,7 @@ Marketplace cards classify known entries as **Agent compatible**, **Agent works 
 
 Provider endpoints and write-only credential references are managed through the bundled Harness settings and credentials services. API keys are stored in the extension's private Harness home, are never returned to the webview, and are not written to project-level `.vscode/settings.json`. Legacy `deepseekHarness.apiKey`, `baseUrl`, and `providers` values are imported once and then removed.
 
-Use the Connection settings panel to add, edit, test, or remove DeepSeek relay sources. Custom sources are registered live through the upstream `llm-pi-ai` adapter and expose the same Flash/Pro choices in the model panel.
+The built-in DeepSeek source accepts a DeepSeek-compatible gateway Base URL when that gateway exposes the official model IDs. Use the Connection settings panel to add, edit, test, or remove relay sources when you need different model IDs or multiple endpoints; those sources are registered live through the upstream `llm-pi-ai` adapter.
 
 Automatically attached selections are limited to 16 KB and are truncated when necessary. If the same file selection is already embedded manually, the host will not attach it again.
 

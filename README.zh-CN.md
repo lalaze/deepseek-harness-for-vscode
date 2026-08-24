@@ -61,7 +61,7 @@
 
 1. 打开要开发的代码项目。
 2. 点击 Activity Bar 中的 **DeepSeek Harness** 图标。
-3. 打开“连接设置”，配置 DeepSeek 官方来源或添加中转来源；也可以运行 `DeepSeek Harness: 设置 API Key` 为官方来源保存密钥。
+3. 打开“连接设置”，可直接为内置 DeepSeek 来源填写官方或兼容网关 Base URL；需要不同模型 ID 或多个来源时，也可以添加中转来源。还可运行 `DeepSeek Harness: 设置 API Key` 为内置来源保存密钥。
 4. 在输入框描述任务并发送。
 
 无需执行任何 Harness 安装或启动命令。
@@ -97,7 +97,7 @@
 
 提供商端点与只写凭据引用统一交给内置 Harness 设置/凭据服务管理。API Key 保存在扩展私有的 Harness Home 中，不会回传给 Webview，也不会写入项目 `.vscode/settings.json`。旧版 `deepseekHarness.apiKey`、`baseUrl` 和 `providers` 会在首次连接时迁移并清除。
 
-可在“连接设置”面板中新增、编辑、测试或移除 DeepSeek 中转来源。自定义来源通过上游 `llm-pi-ai` 适配器实时注册，并在模型面板中提供相同的 Flash/Pro 选择。
+内置 DeepSeek 来源的 Base URL 可改为兼容 DeepSeek API、且暴露官方模型 ID 的网关地址。需要不同模型 ID 或多个来源时，可在“连接设置”面板中新增、编辑、测试或移除中转来源；这些来源通过上游 `llm-pi-ai` 适配器实时注册。
 
 自动附加的选区最长为 16 KB，超出部分会截断。手动附加同一文件选区后，宿主不会再次自动附加。
 

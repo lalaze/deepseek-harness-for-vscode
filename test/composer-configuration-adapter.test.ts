@@ -144,6 +144,7 @@ function payload(
   const configuration: HarnessConfiguration = {
     provider: 'deepseek-official',
     model: 'deepseek-v4-flash',
+    modelSelectionConfigured: true,
     reasoningEffort: 'high',
     agentPreset: 'standard',
     permissionMode: 'workspace-write',

@@ -33,6 +33,10 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
   const apiKey = required<HTMLInputElement>(document, 'settings-api-key')
   const models = required<HTMLInputElement>(document, 'settings-models')
   const modelsField = required<HTMLElement>(document, 'settings-models-field')
+  const visionModels = required<HTMLInputElement>(document, 'settings-vision-models')
+  const visionModelsField = required<HTMLElement>(document, 'settings-vision-models-field')
+  const reasoning = required<HTMLSelectElement>(document, 'settings-reasoning')
+  const reasoningField = required<HTMLElement>(document, 'settings-reasoning-field')
   const openNative = required<HTMLButtonElement>(document, 'settings-open-native')
   const apply = required<HTMLButtonElement>(document, 'settings-apply')
   const remove = required<HTMLButtonElement>(document, 'settings-delete')
@@ -51,6 +55,8 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
     baseUrl: baseUrl.value,
     apiKey: apiKey.value,
     models: models.value.split(/[,，\s]+/u).map((item) => item.trim()).filter((item) => item !== ''),
+    visionModels: visionModels.value.split(/[,，\s]+/u).map((item) => item.trim()).filter((item) => item !== ''),
+    maxReasoningEffort: reasoning.value,
   })
 
   const resetTest = (): void => {
@@ -83,19 +89,26 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
     name.value = provider?.name ?? ''
     name.disabled = !state.writable || (!creating && provider === undefined)
     baseUrl.value = provider?.baseUrl ?? (official ? 'https://api.deepseek.com' : '')
-    // The built-in route is intentionally tied to the native DeepSeek adapter.
-    // Every relay endpoint must be added as a custom pi-ai provider.
-    baseUrl.disabled = !state.writable || official
+    // The native DeepSeek adapter accepts a configurable endpoint, so an
+    // official-model-compatible gateway can reuse the built-in route. Relays
+    // with different model ids still belong in a custom pi-ai provider.
+    baseUrl.disabled = !state.writable
     apiKey.value = ''
     apiKey.disabled = !state.writable || (provider !== undefined && !provider.credentialWritable)
     apiKey.placeholder = provider?.apiKeyConfigured === true ? t('apiKeyKeepPlaceholder') : t('apiKeyPlaceholder')
     // Third-party endpoints are addressed by their own model ids, which the
     // user must be able to enter (e.g. a Volcengine Ark model or endpoint).
     modelsField.classList.toggle('hidden', official)
+    visionModelsField.classList.toggle('hidden', official)
+    reasoningField.classList.toggle('hidden', official)
     models.disabled = !state.writable || official
+    visionModels.disabled = !state.writable || official
+    reasoning.disabled = !state.writable || official
     models.value = (provider?.models.length ?? 0) > 0
       ? provider!.models.join(', ')
       : 'deepseek-v4-flash, deepseek-v4-pro'
+    visionModels.value = provider?.visionModels?.join(', ') ?? ''
+    reasoning.value = provider?.maxReasoningEffort ?? 'max'
     apply.disabled = !state.writable
     test.classList.toggle('hidden', official)
     baseUrl.classList.remove('invalid')
@@ -129,6 +142,9 @@ export function createConnectionSettingsComponent(options: ConnectionSettingsCom
     resetTest()
   })
   apiKey.addEventListener('input', resetTest)
+  models.addEventListener('input', resetTest)
+  visionModels.addEventListener('input', resetTest)
+  reasoning.addEventListener('change', resetTest)
   closeButton.addEventListener('click', () => panel.classList.add('hidden'))
   openNative.addEventListener('click', () => post('openSettings'))
   test.addEventListener('click', () => {

@@ -41,6 +41,8 @@ describe('ConnectionSettingsService', () => {
       name: 'PackyCode',
       baseUrl: 'https://relay.example.com/v1',
       models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      visionModels: [],
+      maxReasoningEffort: 'max',
       apiKeyConfigured: true,
       credentialWritable: true,
       removable: true,
@@ -70,6 +72,28 @@ describe('ConnectionSettingsService', () => {
       .toEqual(['deepseek-v3.1-250828', 'ep-20250417-xxxxx'])
   })
 
+  it('limits custom models to the selected maximum reasoning effort', async () => {
+    const harness = fakeHarness()
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    await service.apply({
+      provider: '__new__',
+      name: 'High Reasoning Relay',
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-secret',
+      models: ['custom-model'],
+      maxReasoningEffort: 'high',
+    })
+
+    expect(harness.document.piAi.value.providers['high-reasoning-relay']!.models).toEqual([{
+      id: 'custom-model',
+      reasoningEfforts: { off: null, low: 'low', high: 'high' },
+    }])
+    expect(service.state.providers.find((provider) => provider.id === 'high-reasoning-relay')?.maxReasoningEffort)
+      .toBe('high')
+  })
+
   it('falls back to the DeepSeek defaults when a custom provider omits models', async () => {
     const harness = fakeHarness()
     const service = serviceFor()
@@ -87,10 +111,91 @@ describe('ConnectionSettingsService', () => {
     expect(harness.document.piAi.value.providers['plain-relay']!.models).toEqual([
       { id: 'deepseek-v4-flash', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
       { id: 'deepseek-v4-pro', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
-      { id: 'deepseek-v4-flash-vision-exp', reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' } },
+      {
+        id: 'deepseek-v4-flash-vision-exp',
+        reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+        input: ['text', 'image'],
+      },
     ])
   })
 
+  it('declares image input for a recognizable custom vision model', async () => {
+    const harness = fakeHarness()
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    await service.apply({
+      provider: '__new__',
+      name: 'Qwen Vision',
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-secret',
+      models: ['qwen27b-fp8-fp16kv-112K-mtp3-text-image-cu128'],
+    })
+
+    expect(harness.document.piAi.value.providers['qwen-vision']!.models).toEqual([{
+      id: 'qwen27b-fp8-fp16kv-112K-mtp3-text-image-cu128',
+      reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+      input: ['text', 'image'],
+    }])
+    expect(service.state.providers.find((provider) => provider.id === 'qwen-vision')?.visionModels)
+      .toEqual(['qwen27b-fp8-fp16kv-112K-mtp3-text-image-cu128'])
+  })
+
+  it('accepts an explicit image-input declaration for a model with an opaque id', async () => {
+    const harness = fakeHarness()
+    const service = serviceFor()
+    await service.connect(harness.client as never)
+
+    await service.apply({
+      provider: '__new__',
+      name: 'Opaque Vision',
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-secret',
+      models: ['deployment-20260824'],
+      visionModels: ['deployment-20260824', 'not-in-the-model-list'],
+    })
+
+    expect(harness.document.piAi.value.providers['opaque-vision']!.models).toEqual([{
+      id: 'deployment-20260824',
+      reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+      input: ['text', 'image'],
+    }])
+  })
+
+  it('upgrades a recognizable stored vision model exactly once', async () => {
+    const harness = fakeHarness({
+      relay: {
+        displayName: 'Relay',
+        apiKeyEnv: 'PROVIDER_RELAY_API_KEY',
+        api: 'openai-completions',
+        baseURL: 'https://relay.example.com/v1',
+        models: [{
+          id: 'qwen27b-fp8-fp16kv-112K-mtp3-text-image-cu128',
+          reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+        }, {
+          id: 'qwen-vl-text-only-deployment',
+          input: ['text'],
+          reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+        }],
+      },
+    })
+    const service = serviceFor()
+
+    await service.connect(harness.client as never)
+
+    expect(harness.document.piAi.value.providers.relay!['models']).toEqual([{
+      id: 'qwen27b-fp8-fp16kv-112K-mtp3-text-image-cu128',
+      reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+      input: ['text', 'image'],
+    }, {
+      id: 'qwen-vl-text-only-deployment',
+      input: ['text'],
+      reasoningEfforts: { off: null, low: 'low', high: 'high', max: 'max' },
+    }])
+    const revision = harness.document.piAi.revision
+    await service.connect(harness.client as never)
+    expect(harness.document.piAi.revision).toBe(revision)
+  })
 
   it('tops up the low reasoning effort on relays written by older builds', async () => {
     const harness = fakeHarness({
@@ -170,18 +275,23 @@ describe('ConnectionSettingsService', () => {
     expect(harness.document.credentials.DEEPSEEK_API_KEY).toBe('official-secret')
   })
 
-  it('requires third-party endpoints to use a custom pi-ai provider', async () => {
+  it('persists a DeepSeek-compatible endpoint override on the built-in route', async () => {
     const harness = fakeHarness()
     const service = serviceFor()
     await service.connect(harness.client as never)
 
-    await expect(service.apply({
+    const route = await service.apply({
       provider: 'deepseek-official',
       name: '',
       baseUrl: 'https://relay.example/v1',
-      apiKey: '',
+      apiKey: 'relay-secret',
       models: [],
-    })).rejects.toThrow('custom provider')
+    })
+
+    expect(route).toBe('deepseek-official')
+    expect(harness.document.deepseek.value.baseURL).toBe('https://relay.example/v1')
+    expect(harness.document.credentials.DEEPSEEK_API_KEY).toBe('relay-secret')
+    expect(service.state.providers[0]?.baseUrl).toBe('https://relay.example/v1')
   })
 
   it('removes the custom profile and its managed credential', async () => {

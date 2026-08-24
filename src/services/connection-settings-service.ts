@@ -9,6 +9,7 @@ import type {
   ConnectionProviderView,
   ConnectionSettingsInput,
   ConnectionSettingsState,
+  CustomReasoningMaximum,
 } from '../domain/connection-settings.js'
 import { validateBaseUrl } from '../domain/base-url.js'
 import {
@@ -34,6 +35,7 @@ const EMPTY_STATE: ConnectionSettingsState = {
     name: 'DeepSeek Official',
     baseUrl: DEEPSEEK_OFFICIAL_BASE_URL,
     models: [],
+    visionModels: [],
     apiKeyConfigured: false,
     credentialWritable: false,
     removable: false,
@@ -76,6 +78,7 @@ export class ConnectionSettingsService {
     this.client = client
     await this.migrateLegacySettings()
     await this.migrateRelayReasoningEfforts()
+    await this.migrateRelayVisionInputs()
     await this.refresh()
   }
 
@@ -149,7 +152,14 @@ export class ConnectionSettingsService {
     const client = this.requireClient()
     const namespace = await this.namespace(PI_AI_SETTINGS_NS)
     const keyRef = providerKeyEnv(route)
-    const profile = deepSeekRelayProfile(normalized.name, normalized.baseUrl, keyRef, normalized.models)
+    const profile = deepSeekRelayProfile(
+      normalized.name,
+      normalized.baseUrl,
+      keyRef,
+      normalized.models,
+      normalized.visionModels,
+      normalized.maxReasoningEffort,
+    )
     const ops: SettingsPathOpView[] = existing === undefined
       ? [{ op: 'set', path: ['providers', route], value: profile }]
       : [
@@ -157,7 +167,11 @@ export class ConnectionSettingsService {
           { op: 'set', path: ['providers', route, 'baseURL'], value: normalized.baseUrl },
           { op: 'set', path: ['providers', route, 'api'], value: 'openai-completions' },
           { op: 'set', path: ['providers', route, 'compat'], value: relayCompat() },
-          { op: 'set', path: ['providers', route, 'models'], value: relayModels(normalized.models) },
+          {
+            op: 'set',
+            path: ['providers', route, 'models'],
+            value: relayModels(normalized.models, normalized.visionModels, normalized.maxReasoningEffort),
+          },
           ...(normalized.apiKey === '' ? [] : [{ op: 'set' as const, path: ['providers', route, 'apiKeyEnv'], value: keyRef }]),
         ]
     const response = await client.settings.mutate({
@@ -206,9 +220,6 @@ export class ConnectionSettingsService {
 
   private async applyOfficial(baseUrl: string, apiKey: string): Promise<void> {
     const client = this.requireClient()
-    if (!isDeepSeekOfficialBaseUrl(baseUrl)) {
-      throw new Error('Third-party endpoints must be added as a custom provider.')
-    }
     const namespace = await this.namespace(DEEPSEEK_SETTINGS_NS)
     const normalizedBase = baseUrl === DEEPSEEK_OFFICIAL_BASE_URL ? '' : baseUrl
     const ops: SettingsPathOpView[] = normalizedBase === ''
@@ -342,6 +353,42 @@ export class ConnectionSettingsService {
     valueOf(await client.settings.mutate({ ns: PI_AI_SETTINGS_NS, ops, expectedRevision: piAi.revision }))
   }
 
+  /**
+   * Declares image input for recognizable vision models saved by older builds.
+   * pi-ai deliberately treats hand-declared models as text-only unless their
+   * profile opts into images, so merely using a vision-capable endpoint is not
+   * enough. This migration is conservative and users can declare model ids
+   * without a recognizable marker through the connection settings UI.
+   */
+  private async migrateRelayVisionInputs(): Promise<void> {
+    const client = this.requireClient()
+    const described = valueOf(await client.settings.describe({}))
+    if (!described.writable) return
+    const piAi = described.namespaces.find((item) => item.ns === PI_AI_SETTINGS_NS)
+    if (piAi === undefined) return
+    const providers = valueAt(piAi.user, ['providers'])
+    if (typeof providers !== 'object' || providers === null || Array.isArray(providers)) return
+    const ops: SettingsPathOpView[] = []
+    for (const [route, profile] of Object.entries(providers)) {
+      const models = valueAt(profile, ['models'])
+      if (!Array.isArray(models)) continue
+      let changed = false
+      const upgraded = models.map((model) => {
+        if (typeof model !== 'object' || model === null || Array.isArray(model)) return model
+        const entry = model as Record<string, unknown>
+        const id = stringField(entry, 'id')
+        // Respect an explicit text-only (or otherwise customized) declaration;
+        // only old entries that omitted the capability entirely are inferred.
+        if (id === undefined || !looksLikeVisionModel(id) || Object.hasOwn(entry, 'input')) return model
+        changed = true
+        return { ...entry, input: ['text', 'image'] }
+      })
+      if (changed) ops.push({ op: 'set', path: ['providers', route, 'models'], value: upgraded })
+    }
+    if (ops.length === 0) return
+    valueOf(await client.settings.mutate({ ns: PI_AI_SETTINGS_NS, ops, expectedRevision: piAi.revision }))
+  }
+
   private requireClient(): ProviderControlClient {
     if (this.client === undefined) throw new Error('Harness Gateway is not connected.')
     return this.client
@@ -380,7 +427,18 @@ function normalizeInput(input: ConnectionSettingsInput): ConnectionSettingsInput
   const models = input.provider === DEEPSEEK_OFFICIAL_PROVIDER
     ? []
     : normalizeRelayModels(input.models)
-  return { ...input, name, baseUrl, apiKey, models }
+  const requestedVisionModels = input.provider === DEEPSEEK_OFFICIAL_PROVIDER
+    ? []
+    : normalizeRelayModels(input.visionModels)
+  const modelSet = new Set(models.length > 0 ? models : DEFAULT_RELAY_MODEL_IDS)
+  const visionModels = [...new Set([
+    ...requestedVisionModels.filter((model) => modelSet.has(model)),
+    ...[...modelSet].filter(looksLikeVisionModel),
+  ])]
+  const maxReasoningEffort = input.provider === DEEPSEEK_OFFICIAL_PROVIDER
+    ? 'max'
+    : normalizeMaxReasoningEffort(input.maxReasoningEffort)
+  return { ...input, name, baseUrl, apiKey, models, visionModels, maxReasoningEffort }
 }
 
 /**
@@ -398,6 +456,13 @@ function normalizeRelayModels(models: readonly string[] | undefined): readonly s
 /** Reasoning effort wire map the extension writes for custom relay models. */
 const RELAY_REASONING_EFFORTS = { off: null, low: 'low', high: 'high', max: 'max' } as const
 
+const CUSTOM_REASONING_MAXIMUMS: readonly CustomReasoningMaximum[] = ['low', 'high', 'max']
+
+const DEFAULT_RELAY_MODEL_IDS = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp'] as const
+
+/** Strong model-id hints used only to make common vision routes work on upgrade. */
+const VISION_MODEL_ID_SEGMENT = /(?:^|[-_.])(?:vision|image|vl|multimodal)(?:$|[-_.])/iu
+
 /** Map shape written by builds before the low tier existed (pre rc.7). */
 const LEGACY_RELAY_REASONING_EFFORTS = { off: null, high: 'high', max: 'max' } as const
 
@@ -408,22 +473,35 @@ function isLegacyRelayReasoningEfforts(efforts: object): boolean {
     && legacy.every(([key, value]) => (efforts as Record<string, unknown>)[key] === value)
 }
 
-function relayModels(models: readonly string[]): { id: string; reasoningEfforts: object }[] {
-  const ids = models.length > 0 ? models : ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp']
+function relayModels(
+  models: readonly string[],
+  visionModels: readonly string[] = [],
+  maxReasoningEffort: CustomReasoningMaximum = 'max',
+): { id: string; reasoningEfforts: object; input?: readonly string[] }[] {
+  const ids = models.length > 0 ? models : DEFAULT_RELAY_MODEL_IDS
+  const vision = new Set([...visionModels, ...ids.filter(looksLikeVisionModel)])
   return ids.map((id) => ({
     id,
-    reasoningEfforts: { ...RELAY_REASONING_EFFORTS },
+    reasoningEfforts: reasoningEffortsThrough(maxReasoningEffort),
+    ...(vision.has(id) ? { input: ['text', 'image'] } : {}),
   }))
 }
 
-function deepSeekRelayProfile(displayName: string, baseURL: string, apiKeyEnv: string, models?: readonly string[]): object {
+function deepSeekRelayProfile(
+  displayName: string,
+  baseURL: string,
+  apiKeyEnv: string,
+  models?: readonly string[],
+  visionModels?: readonly string[],
+  maxReasoningEffort: CustomReasoningMaximum = 'max',
+): object {
   return {
     displayName,
     apiKeyEnv,
     api: 'openai-completions',
     baseURL,
     compat: relayCompat(),
-    models: relayModels(models ?? []),
+    models: relayModels(models ?? [], visionModels, maxReasoningEffort),
   }
 }
 
@@ -448,6 +526,10 @@ function providerView(
     name: entry.displayName,
     baseUrl,
     models: modelsField(profile),
+    visionModels: visionModelsField(profile),
+    ...(entry.settingsNs === PI_AI_SETTINGS_NS
+      ? { maxReasoningEffort: maxReasoningEffortField(profile) }
+      : {}),
     apiKeyConfigured: credential?.configured === true,
     credentialWritable: credential?.writable === true,
     removable: entry.settingsPath.length > 0 && valueAt(namespace?.user, entry.settingsPath) !== undefined,
@@ -478,6 +560,68 @@ function modelsField(value: unknown): readonly string[] {
       ? stringField(model, 'id')
       : typeof model === 'string' ? model : undefined))
     .filter((model): model is string => model !== undefined)
+}
+
+function visionModelsField(value: unknown): readonly string[] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return []
+  const models = (value as Record<string, unknown>)['models']
+  if (!Array.isArray(models)) return []
+  return models.flatMap((model) => {
+    if (typeof model !== 'object' || model === null || Array.isArray(model)) return []
+    const id = stringField(model, 'id')
+    return id !== undefined && declaresImageInput(model as Record<string, unknown>) ? [id] : []
+  })
+}
+
+function declaresImageInput(model: Record<string, unknown>): boolean {
+  return Array.isArray(model['input']) && model['input'].includes('image')
+}
+
+function normalizeMaxReasoningEffort(value: unknown): CustomReasoningMaximum {
+  return CUSTOM_REASONING_MAXIMUMS.includes(value as CustomReasoningMaximum)
+    ? value as CustomReasoningMaximum
+    : 'max'
+}
+
+function reasoningEffortsThrough(maximum: CustomReasoningMaximum): object {
+  const stop = ['low', 'high', 'max'].indexOf(maximum)
+  return Object.fromEntries(
+    Object.entries(RELAY_REASONING_EFFORTS).filter(([effort]) => effort === 'off'
+      || ['low', 'high', 'max'].indexOf(effort) <= stop),
+  )
+}
+
+function maxReasoningEffortField(value: unknown): CustomReasoningMaximum {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'max'
+  const models = (value as Record<string, unknown>)['models']
+  if (!Array.isArray(models)) return 'max'
+  let maximum: CustomReasoningMaximum = 'max'
+  for (const model of models) {
+    if (typeof model !== 'object' || model === null || Array.isArray(model)) continue
+    const efforts = (model as Record<string, unknown>)['reasoningEfforts']
+    const modelMaximum = configuredReasoningMaximum(efforts)
+    if (modelMaximum !== undefined && reasoningMaximumIndex(modelMaximum) < reasoningMaximumIndex(maximum)) {
+      maximum = modelMaximum
+    }
+  }
+  return maximum
+}
+
+function configuredReasoningMaximum(value: unknown): CustomReasoningMaximum | undefined {
+  if (value === false) return undefined
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  if ('max' in value) return 'max'
+  if ('high' in value) return 'high'
+  if ('low' in value) return 'low'
+  return undefined
+}
+
+function reasoningMaximumIndex(value: CustomReasoningMaximum): number {
+  return CUSTOM_REASONING_MAXIMUMS.indexOf(value)
+}
+
+function looksLikeVisionModel(id: string): boolean {
+  return VISION_MODEL_ID_SEGMENT.test(id)
 }
 
 function valueAt(root: unknown, path: readonly string[]): unknown {

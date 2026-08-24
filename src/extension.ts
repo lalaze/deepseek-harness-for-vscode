@@ -21,7 +21,7 @@ let activeRuntime: HarnessHostRuntime | undefined
 /** Activates one self-contained Harness workbench; no external deployment is required. */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('DeepSeek Harness', { log: true })
-  const configuration = new ConfigurationService()
+  const configuration = new ConfigurationService(context.globalState)
   const credentials = new CredentialStore(context.secrets)
   const resolver = new BundledRuntimeResolver(context, (message, ...args) => vscode.l10n.t(message, ...args))
   const connectionSettings = new ConnectionSettingsService(configuration, credentials)
@@ -79,7 +79,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     editorSelection,
     workspaceFiles,
     {
-      setApiKey,
       applySettings,
       removeProvider,
       testConnection: (input) => connectionTest.test(input),

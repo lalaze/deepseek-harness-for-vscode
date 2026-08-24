@@ -70,7 +70,8 @@
       },
       {
         "command": "deepseekHarness.showLogs",
-        "title": "%command.showLogs%"
+        "title": "%command.showLogs%",
+        "icon": "$(output)"
       },
       {
         "command": "deepseekHarness.importSession",
@@ -82,7 +83,7 @@
       "activitybar": [
         {
           "id": "deepseekHarness",
-          "title": "DeepSeek Harness for Visual Studio Code",
+          "title": "DeepSeek Harness",
           "icon": "media/deepseek-harness.svg"
         }
       ]

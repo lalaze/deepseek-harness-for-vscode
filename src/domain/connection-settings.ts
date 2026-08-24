@@ -1,10 +1,16 @@
 /** Redacted provider settings sent to the webview. API keys never travel back. */
+export type CustomReasoningMaximum = 'low' | 'high' | 'max'
+
 export interface ConnectionProviderView {
   readonly id: string
   readonly name: string
   readonly baseUrl: string
   /** Model ids this provider's profile exposes; empty means the defaults. */
   readonly models: readonly string[]
+  /** Model ids whose profile explicitly accepts image input. */
+  readonly visionModels?: readonly string[]
+  /** Highest reasoning tier offered by every model on this custom route. */
+  readonly maxReasoningEffort?: CustomReasoningMaximum
   readonly apiKeyConfigured: boolean
   readonly credentialWritable: boolean
   readonly removable: boolean
@@ -27,6 +33,10 @@ export interface ConnectionSettingsInput {
    * falls back to the extension's DeepSeek defaults.
    */
   readonly models: readonly string[]
+  /** Custom-provider model ids that accept image input. */
+  readonly visionModels?: readonly string[]
+  /** Highest reasoning tier the custom endpoint accepts. */
+  readonly maxReasoningEffort?: CustomReasoningMaximum
 }
 
 export type ConnectionTestStatus = 'success' | 'unreachable' | 'unsupported'
@@ -38,4 +48,3 @@ export interface ConnectionTestResult {
 }
 
 export const NEW_PROVIDER = '__new__'
-

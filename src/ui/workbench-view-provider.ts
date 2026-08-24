@@ -14,7 +14,6 @@ import type { PromptAttachment, PromptImageMediaType } from '../domain/prompt-co
 import { localizeWebviewMessages, type WebviewMessageKey } from '../webview/localization.js'
 
 export interface WorkbenchViewActions {
-  readonly setApiKey: () => Promise<void>
   readonly applySettings: (input: ConnectionSettingsInput) => Promise<void>
   readonly removeProvider: (provider: string) => Promise<void>
   readonly testConnection: (input: ConnectionSettingsInput) => Promise<ConnectionTestResult>
@@ -166,9 +165,6 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         break
       case 'retry':
         await this.refresh()
-        break
-      case 'setApiKey':
-        await this.actions.setApiKey()
         break
       case 'applySettings': {
         await this.actions.applySettings(settingsInput(value))
@@ -454,7 +450,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
   <section id="key-banner" class="key-banner hidden">
     <span>${text('apiKeyRequired')}</span>
-    <button id="set-api-key">${text('configure')}</button>
+    <button id="configure-connection">${text('configure')}</button>
   </section>
 
   <aside id="history-panel" class="history-panel hidden" aria-label="${text('history')}">
@@ -674,6 +670,20 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           <input id="settings-models" type="text" spellcheck="false" autocomplete="off" placeholder="${text('providerModelsPlaceholder')}">
           <small class="settings-hint">${text('providerModelsHint')}</small>
         </label>
+        <label class="settings-field hidden" id="settings-vision-models-field">
+          <span class="settings-label">${text('providerVisionModels')}</span>
+          <input id="settings-vision-models" type="text" spellcheck="false" autocomplete="off" placeholder="${text('providerVisionModelsPlaceholder')}">
+          <small class="settings-hint">${text('providerVisionModelsHint')}</small>
+        </label>
+        <label class="settings-field hidden" id="settings-reasoning-field">
+          <span class="settings-label">${text('providerMaxReasoningEffort')}</span>
+          <select id="settings-reasoning" class="settings-select">
+            <option value="low">${text('providerReasoningLow')}</option>
+            <option value="high">${text('providerReasoningHigh')}</option>
+            <option value="max">${text('providerReasoningMax')}</option>
+          </select>
+          <small class="settings-hint">${text('providerReasoningHint')}</small>
+        </label>
         <div class="settings-test-row">
           <button id="settings-test" class="secondary-button" type="button">${text('testConnection')}</button>
           <span id="settings-test-result" class="settings-status hidden"></span>
@@ -709,7 +719,13 @@ function settingsInput(value: Record<string, unknown>): ConnectionSettingsInput 
   const baseUrl = typeof value.baseUrl === 'string' ? value.baseUrl : ''
   const apiKey = typeof value.apiKey === 'string' ? value.apiKey : ''
   const models = modelsInput(value.models)
-  return { provider, name, baseUrl, apiKey, models }
+  const visionModels = modelsInput(value.visionModels)
+  const maxReasoningEffort = reasoningMaximumInput(value.maxReasoningEffort)
+  return { provider, name, baseUrl, apiKey, models, visionModels, maxReasoningEffort }
+}
+
+function reasoningMaximumInput(value: unknown): NonNullable<ConnectionSettingsInput['maxReasoningEffort']> {
+  return value === 'low' || value === 'high' || value === 'max' ? value : 'max'
 }
 
 /** Accepts an array of ids or a single comma/space-separated string. */
